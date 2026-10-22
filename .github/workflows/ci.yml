@@ -89,22 +89,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee app/xcodebuild-test.log
 
-      - name: Export UI test screenshots
-        if: always()
-        run: |
-          mkdir -p app/UITestScreenshots
-          xcrun xcresulttool export attachments \
-            --path app/TestResults.xcresult \
-            --output-path app/UITestScreenshots || true
-          ls -la app/UITestScreenshots
-
       - name: Upload UI test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-ui-test-artifacts
           path: |
-            app/UITestScreenshots
+            /tmp/markdown-notepad-ui-screenshots
             app/TestResults.xcresult
             app/xcodebuild-test.log
           if-no-files-found: warn

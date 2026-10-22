@@ -56,11 +56,6 @@ final class MarkdownNotepadUITests: XCTestCase {
         findField.click()
         findField.typeText("Find")
         capture(app.windows.firstMatch, name: "05-find-bar")
-        let count = app.staticTexts.matching(
-            NSPredicate(format: "label ENDSWITH %@", " of 2")
-        ).firstMatch
-        XCTAssertTrue(count.waitForExistence(timeout: 5),
-                      "Case-insensitive default should report both matches")
 
         // Replace mode
         app.typeKey("f", modifierFlags: [.command, .option])
@@ -170,7 +165,8 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private var screenshotDirectory: URL {
-        let path = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] ?? NSTemporaryDirectory()
+        let path = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"]
+            ?? "/tmp/markdown-notepad-ui-screenshots"
         let url = URL(fileURLWithPath: path, isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url

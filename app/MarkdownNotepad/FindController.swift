@@ -173,7 +173,7 @@ final class FindController: ObservableObject {
                   let textRange = NSTextRange(location: start, end: end) else { continue }
             let color = index == currentIndex
                 ? NSColor.findHighlightColor
-                : NSColor.findHighlightColor.withAlphaComponent(0.35)
+                : NSColor.findHighlightColor.withAlphaComponent(0.5)
             layoutManager.setRenderingAttributes([.backgroundColor: color], for: textRange)
             layoutManager.invalidateLayout(for: textRange)
         }
