@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import XCTest
 
 final class MarkdownNotepadUITests: XCTestCase {
@@ -246,6 +247,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(app.menuBars.menuItems["Unordered List"].exists,
                       "The Editor menu should expose list commands")
         app.typeKey(.escape, modifierFlags: [])
+        editor.click()
 
         app.typeKey("a", modifierFlags: .command)
         app.typeKey("b", modifierFlags: .command)
@@ -362,9 +364,18 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(reloadPrompt.buttons["Reload"].exists, "Conflict must offer Reload")
         XCTAssertTrue(reloadPrompt.buttons["Overwrite"].exists, "Conflict must offer Overwrite")
         XCTAssertTrue(reloadPrompt.buttons["Save As…"].exists, "Conflict must offer Save As")
-        XCTAssertTrue(app.buttons["Cancel"].exists, "Conflict must offer Cancel")
-
-        reloadPrompt.buttons["Reload"].click()
+        // Cancel is the dialog's dismiss action; Escape must leave the file and
+        // editor untouched, then a second save shows the prompt again.
+        app.typeKey(.escape, modifierFlags: [])
+        let dismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: reloadPrompt
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [dismissed], timeout: 5), .completed,
+                       "Cancel should dismiss the conflict prompt")
+        app.typeKey("s", modifierFlags: .command)
+        let reloadAgain = waitForConflictPrompt(app)
+        reloadAgain.buttons["Reload"].click()
         let reloaded = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value CONTAINS %@", "Changed outside the app"),
             object: editor
@@ -419,15 +430,15 @@ final class MarkdownNotepadUITests: XCTestCase {
 
         // A real force quit (SIGKILL), not the cooperative terminate() that
         // would run the normal save prompts and delete the recovery snapshot.
-        let killer = Process()
-        killer.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killer.arguments = ["-9", "-f", "MarkdownNotepad.app/Contents/MacOS/MarkdownNotepad"]
-        do {
-            try killer.run()
-            killer.waitUntilExit()
-        } catch {
-            return XCTFail("Could not force quit the app: \(error)")
+        // pkill cannot read the process table from the UI-test sandbox, but the
+        // test owns the app process and can signal it directly.
+        guard let runningApp = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.ryanpaperclip.markdownnotepad"
+        ).first(where: { $0.isTerminated == false }) else {
+            return XCTFail("Could not find the running app to force quit")
         }
+        XCTAssertEqual(kill(runningApp.processIdentifier, SIGKILL), 0,
+                       "SIGKILL to the app should succeed")
         XCTAssertTrue(app.wait(for: .notRunning, timeout: 15),
                       "Force quit should terminate the app")
 
@@ -589,12 +600,25 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private func waitForMode(_ app: XCUIApplication, _ title: String, timeout: TimeInterval = 5) -> Bool {
-        let marker = app.staticTexts["activeMode"]
-        guard marker.waitForExistence(timeout: timeout) else { return false }
-        print("MODE WAIT expected '\(title)' actual '\(marker.label)'")
-        let predicate = NSPredicate(format: "label == %@", title)
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: marker)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        guard let rawValue = modeRawValue(for: title) else {
+            XCTFail("Unknown editor mode \(title)")
+            return false
+        }
+        let marker = app.descendants(matching: .any)["activeMode-\(rawValue)"].firstMatch
+        return marker.waitForExistence(timeout: timeout)
+    }
+
+    private func modeRawValue(for title: String) -> String? {
+        switch title {
+        case "Plain Text":
+            return "plainText"
+        case "Panels":
+            return "panels"
+        case "WYSIWYG":
+            return "wysiwyg"
+        default:
+            return nil
+        }
     }
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {

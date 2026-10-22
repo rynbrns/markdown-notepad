@@ -99,6 +99,10 @@ struct FindBarView: View {
         .onAppear { queryFocused = true }
     }
 
+    private var counterText: String {
+        "\(controller.currentIndex + 1) of \(controller.matchCount)"
+    }
+
     @ViewBuilder
     private var statusLabel: some View {
         if let error = controller.errorMessage {
@@ -115,9 +119,10 @@ struct FindBarView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Text(verbatim: "\(controller.currentIndex + 1) of \(controller.matchCount)")
+            Text(verbatim: counterText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityLabel(Text(verbatim: counterText))
                 .accessibilityIdentifier("findStatus")
         }
     }

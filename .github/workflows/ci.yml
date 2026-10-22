@@ -81,8 +81,10 @@ jobs:
 
       - name: Capture app icon evidence (Dock/Finder)
         env:
-          SCREENSHOT_DIR: /tmp/markdown-notepad-ui-screenshots
+          SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
           ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
+          TEST_RUNNER_SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
+          TEST_RUNNER_ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
         run: |
           set -o pipefail
           rm -rf /tmp/icon-evidence.xcresult
@@ -111,6 +113,8 @@ jobs:
         env:
           SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
           ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
+          TEST_RUNNER_SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
+          TEST_RUNNER_ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
         run: |
           set -o pipefail
           rm -rf app/TestResults.xcresult

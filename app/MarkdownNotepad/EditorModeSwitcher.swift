@@ -30,7 +30,11 @@ struct EditorModeSwitcher: View {
                 .help("\(mode.title) — \(mode.summary) (\(shortcut(for: mode)))")
                 .accessibilityLabel(mode.title)
                 .accessibilityValue(session.editorMode == mode ? "selected" : "")
-                .accessibilityIdentifier("mode-\(mode.rawValue)")
+                .accessibilityIdentifier(
+                    session.editorMode == mode
+                        ? "activeMode-\(mode.rawValue)"
+                        : "mode-\(mode.rawValue)"
+                )
             }
         }
         .padding(2)
