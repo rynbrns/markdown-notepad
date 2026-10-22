@@ -168,8 +168,8 @@ final class FindController: ObservableObject {
                     contentStorage.documentRange.location,
                     offsetBy: match.range.location
                   ),
-                  let end = contentStorage.location(start, offsetBy: match.range.length) else { continue }
-            let textRange = NSTextRange(location: start, end: end)
+                  let end = contentStorage.location(start, offsetBy: match.range.length),
+                  let textRange = NSTextRange(location: start, end: end) else { continue }
             let color = index == currentIndex
                 ? NSColor.findHighlightColor
                 : NSColor.findHighlightColor.withAlphaComponent(0.35)
