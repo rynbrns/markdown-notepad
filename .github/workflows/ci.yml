@@ -123,6 +123,7 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath app/.derivedData \
             -resultBundlePath app/TestResults.xcresult \
+            -only-testing:MarkdownNotepadUITests/MarkdownNotepadUITests/test05TitleBarRenameCommitsAndCancelKeepsName \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_REQUIRED=NO \
