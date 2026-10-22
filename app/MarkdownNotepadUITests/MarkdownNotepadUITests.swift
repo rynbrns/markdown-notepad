@@ -55,9 +55,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(findField.waitForExistence(timeout: 5), "⌘F should reveal the find bar")
         findField.click()
         findField.typeText("Find")
-        let count = app.staticTexts["findMatchCount"]
-        XCTAssertTrue(count.waitForExistence(timeout: 5))
-        XCTAssertEqual(count.label, "1 of 2", "Case-insensitive default should find both matches")
+        let count = app.staticTexts["1 of 2"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5),
+                      "Case-insensitive default should report both matches")
         capture(app.windows.firstMatch, name: "05-find-bar")
 
         // Replace mode
