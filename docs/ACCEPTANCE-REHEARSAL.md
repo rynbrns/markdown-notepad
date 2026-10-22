@@ -1,5 +1,14 @@
 # Internal acceptance rehearsal — v0.2.0
 
+Run: [CI 39770053833](https://github.com/rynbrns/markdown-notepad/actions/runs/39770053833) (Linux core + macOS core + full XCUITest suite, 2026-10-22).
+Environment: GitHub `macos-14` arm64 runner, Xcode 15.4. Raw log and the
+`.xcresult` bundle are attached to [RYA-14](/RYA/issues/RYA-14).
+
+All 10 steps of the board checklist are covered by an automated check. The
+"Board-only check" column lists the parts that genuinely require the board's own
+Mac; everything else was exercised on CI. A screenshot for every step is
+attached as `ui-test-screenshots.zip`.
+
 Generated from the macOS XCUITest run. The board’s own Mac is still the
 final gate for the manual items below. A screenshot for every step is attached
 to [RYA-14](/RYA/issues/RYA-14) as `ui-test-screenshots.zip`.
