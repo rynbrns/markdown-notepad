@@ -1,10 +1,11 @@
 # Markdown Notepad
 
-A native macOS markdown notepad (macOS 14+, Apple Silicon). This repository is at
-**M2 + M4**: the file layer is trustworthy, the app ships the native shell —
-multi-window and tabs, a full menu bar, unsaved-changes prompts, recents,
-find/replace, dark mode, and session restoration — and CI produces an
-installable ad-hoc-signed Apple Silicon `.dmg`.
+A native macOS markdown notepad (macOS 14+, Apple Silicon). **M0–M4 are done**:
+the file layer is trustworthy, the app ships the native shell — multi-window and
+tabs, a full menu bar, unsaved-changes prompts, recents, find/replace, dark
+mode, and session restoration — the M3 syntax highlighting and split preview
+shipped along with the editor-mode and formatting QoL batch, and CI produces an
+installable ad-hoc-signed Apple Silicon `.dmg`. **M5 hardening is in progress.**
 
 ## Architecture
 
@@ -295,12 +296,16 @@ VERSION=0.1.0 ./scripts/verify-release.sh
 
 ## Status / limitations
 
-- Markdown highlighting and the split preview are M3; packaging and signing are M4.
-- macOS document versions/autosave are not part of M2; Revert to Saved and
+- Milestones M0–M4 are complete: M3 Markdown highlighting and the split preview
+  shipped, the editor-mode and formatting QoL batch shipped, and M4 packaging
+  and ad-hoc signing produce the `.dmg`. M5 hardening is in progress.
+- macOS document versions/autosave are not implemented; Revert to Saved and
   crash-recovery snapshots cover the data-safety paths.
 - The app builds from `app/project.yml`; the generated `.xcodeproj` is ignored
   by git on purpose.
 - Double-clicking this app's title bar starts a rename instead of the system
   "double-click title bar to zoom/minimize" action, matching the product
   request. The title bar remains draggable for moving the window.
-- Not a WYSIWYG editor. The product is a plain-text markdown notepad.
+- WYSIWYG is source-preserving: it hides inline markers, while list bullets and
+  task boxes remain as source markers and tables and code blocks are styled but
+  not converted. The document is never converted to a separate rich-text model.
