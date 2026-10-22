@@ -155,7 +155,7 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - App icon evidence
 
-    func test05AppIconInDockAndFinder() throws {
+    func test08AppIconInDockAndFinder() throws {
         let app = launchApp()
         _ = newWindowAndFocusEditor(app)
 
@@ -187,10 +187,154 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.terminate()
     }
 
+    // MARK: - Interactive title bar
+
+    func test05TitleBarRenameCommitsAndCancelKeepsName() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("Rename through the title bar.")
+
+        let titleBarName = app.descendants(matching: .any)["titleBarNameField"]
+        XCTAssertTrue(titleBarName.waitForExistence(timeout: 5),
+                      "The title bar should expose a document name field")
+
+        titleBarName.doubleClick()
+        let editingField = app.textFields["titleBarNameField"]
+        XCTAssertTrue(editingField.waitForExistence(timeout: 5),
+                      "Double-clicking the title should make the name editable")
+        editingField.typeKey("a", modifierFlags: .command)
+        editingField.typeText("Renamed")
+        captureScreen(name: "12-title-bar-rename")
+        app.typeKey(.return, modifierFlags: [])
+
+        let statusName = app.staticTexts["documentName"]
+        XCTAssertTrue(statusName.waitForExistence(timeout: 5))
+        XCTAssertEqual(statusName.label, "Renamed.md",
+                       "Committing the rename should update the document title")
+
+        let titleBarAgain = app.descendants(matching: .any)["titleBarNameField"]
+        titleBarAgain.doubleClick()
+        let secondEdit = app.textFields["titleBarNameField"]
+        XCTAssertTrue(secondEdit.waitForExistence(timeout: 5))
+        secondEdit.typeKey("a", modifierFlags: .command)
+        secondEdit.typeText("Never committed")
+        app.typeKey(.escape, modifierFlags: [])
+
+        XCTAssertEqual(app.staticTexts["documentName"].label, "Renamed.md",
+                       "Escape should discard the in-progress rename")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    // MARK: - Formatting shortcuts
+
+    func test06MarkdownFormattingShortcuts() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("alpha\nbeta")
+
+        app.menuBars.menuBarItems["Editor"].click()
+        XCTAssertTrue(app.menuBars.menuItems["Bold"].waitForExistence(timeout: 3),
+                      "The Editor menu should expose Bold")
+        XCTAssertTrue(app.menuBars.menuItems["Unordered List"].exists,
+                      "The Editor menu should expose list commands")
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("b", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "**alpha\nbeta**", "⌘B should wrap the selection")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta", "⌘Z should restore the exact text")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("8", modifierFlags: [.command, .shift])
+        XCTAssertEqual(editor.value as? String, "- alpha\n- beta", "⇧⌘8 should bullet every line")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("1", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "# alpha\n# beta", "⌘1 should set Heading 1")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("k", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "[alpha\nbeta](url)", "⌘K should insert a link")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    // MARK: - Editor modes
+
+    func test07EditorModesSwitchAndPersist() throws {
+        let supportDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarkdownNotepadModes-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: supportDirectory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: supportDirectory) }
+
+        var app = launchApp(supportDirectory: supportDirectory)
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("# Title\n\nA **bold** line and [a link](https://example.com).")
+        let source = editor.value as? String
+
+        XCTAssertTrue(waitForMode(app, "Panels"), "An unset preference should start in Panels")
+
+        app.typeKey("1", modifierFlags: [.control, .command])
+        XCTAssertTrue(waitForMode(app, "Plain Text"), "⌃⌘1 should switch to Plain Text")
+
+        let wysiwygButton = app.descendants(matching: .any)["mode-wysiwyg"].firstMatch
+        XCTAssertTrue(wysiwygButton.waitForExistence(timeout: 5),
+                      "The status bar should expose mode buttons")
+        wysiwygButton.click()
+        XCTAssertTrue(waitForMode(app, "WYSIWYG"), "The WYSIWYG button should switch modes")
+        XCTAssertEqual(editor.value as? String, source,
+                       "Switching to WYSIWYG must not rewrite the Markdown")
+
+        // Menu path: View > Editor Mode > Panels
+        app.menuBars.menuBarItems["View"].click()
+        let modeMenu = app.menuBars.menuItems["Editor Mode"]
+        XCTAssertTrue(modeMenu.waitForExistence(timeout: 3),
+                      "View should contain an Editor Mode menu")
+        modeMenu.hover()
+        let panelsItem = app.menuBars.menuItems["Panels"]
+        XCTAssertTrue(panelsItem.waitForExistence(timeout: 3),
+                      "The mode menu should list Panels")
+        panelsItem.click()
+        XCTAssertTrue(waitForMode(app, "Panels"), "The menu should switch to Panels")
+        XCTAssertTrue(app.staticTexts["previewVisible"].waitForExistence(timeout: 10),
+                      "Panels should show the live preview")
+
+        // The last chosen mode is persisted for the next launch.
+        app.typeKey("3", modifierFlags: [.control, .command])
+        XCTAssertTrue(waitForMode(app, "WYSIWYG"))
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+
+        app = launchApp(supportDirectory: supportDirectory)
+        _ = newWindowAndFocusEditor(app)
+        XCTAssertTrue(waitForMode(app, "WYSIWYG"),
+                      "The persisted default mode should be restored on relaunch")
+        app.typeKey("w", modifierFlags: .command)
+        app.terminate()
+    }
 
     // MARK: - File conflicts
 
-    func test06FileConflictOffersReloadOverwriteAndSaveAs() throws {
+    func test10FileConflictOffersReloadOverwriteAndSaveAs() throws {
         let directory = makeTestDirectory("conflict")
         let file = directory.appendingPathComponent("conflict.md")
         try "# Original\n".write(to: file, atomically: true, encoding: .utf8)
@@ -251,7 +395,7 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - Crash recovery
 
-    func test07ForceQuitThenRelaunchRestoresUnsavedText() throws {
+    func test11ForceQuitThenRelaunchRestoresUnsavedText() throws {
         let directory = makeTestDirectory("recovery")
         let support = directory.appendingPathComponent("support")
         let app = launchApp(supportDirectory: support)
@@ -290,7 +434,7 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - Accessibility
 
-    func test08AccessibilityLabelsForEditorToolbarAndPreview() throws {
+    func test12AccessibilityLabelsForEditorToolbarAndPreview() throws {
         let directory = makeTestDirectory("accessibility")
         let app = launchApp(supportDirectory: directory.appendingPathComponent("support"))
         let editor = newWindowAndFocusEditor(app)
@@ -331,7 +475,7 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - Internal acceptance rehearsal (steps 3, 5, 8, 10)
 
-    func test09AcceptanceRehearsalSaveReopenFindUndo() throws {
+    func test13AcceptanceRehearsalSaveReopenFindUndo() throws {
         let directory = makeTestDirectory("rehearsal")
         let file = directory.appendingPathComponent("test.md")
         try "".write(to: file, atomically: true, encoding: .utf8)
@@ -389,26 +533,6 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func makeTestDirectory(_ name: String) -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("MarkdownNotepadUITests-\(name)-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
-    private func waitForConflictPrompt(_ app: XCUIApplication) -> XCUIElement {
-        let sheet = app.sheets.firstMatch
-        if sheet.waitForExistence(timeout: 10) {
-            return sheet
-        }
-        let dialog = app.dialogs.firstMatch
-        if dialog.waitForExistence(timeout: 5) {
-            return dialog
-        }
-        XCTFail("File conflict prompt did not appear")
-        return sheet
-    }
-
     private func launchApp(
         dark: Bool = false,
         supportDirectory: URL? = nil,
@@ -430,6 +554,33 @@ final class MarkdownNotepadUITests: XCTestCase {
         return app
     }
 
+    private func makeTestDirectory(_ name: String) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarkdownNotepadUITests-\(name)-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func waitForConflictPrompt(_ app: XCUIApplication) -> XCUIElement {
+        let sheet = app.sheets.firstMatch
+        if sheet.waitForExistence(timeout: 10) {
+            return sheet
+        }
+        let dialog = app.dialogs.firstMatch
+        if dialog.waitForExistence(timeout: 5) {
+            return dialog
+        }
+        XCTFail("File conflict prompt did not appear")
+        return sheet
+    }
+
+    private func waitForMode(_ app: XCUIApplication, _ title: String, timeout: TimeInterval = 5) -> Bool {
+        let marker = app.staticTexts["activeMode"]
+        guard marker.waitForExistence(timeout: timeout) else { return false }
+        let predicate = NSPredicate(format: "label == %@", title)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: marker)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {
         app.menuBars.menuBarItems["File"].click()

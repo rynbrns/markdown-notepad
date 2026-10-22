@@ -17,7 +17,7 @@ final class WorkspaceCoordinator: ObservableObject {
     private let recentStore: RecentDocumentsStore
     private let restorationStore: SessionRestorationStore
     private let recoveryStore: RecoveryStore
-    private let supportDirectory: URL
+    private let modeStore: EditorModeStore
     private let isUITesting: Bool
     private var pendingURLs: [URL] = []
     private var pendingSnapshots: [RecoverySnapshot] = []
@@ -33,13 +33,15 @@ final class WorkspaceCoordinator: ObservableObject {
         let environment = ProcessInfo.processInfo.environment
         let testing = environment["MARKDOWN_NOTEPAD_UI_TESTING"] == "1"
         isUITesting = testing
-
-        // One state directory holds recents, restoration, and recovery so a UI
-        // test (or a future sandboxed container) can isolate all three and a
-        // force-quit test can relaunch against the same directory.
+        // One state directory holds recents, restoration, recovery, and the
+        // editor-mode default so a UI test (or a future sandboxed container)
+        // can isolate all of them and a force-quit test can relaunch against
+        // the same directory.
+        let supportOverride = environment["MARKDOWN_NOTEPAD_SUPPORT_DIR"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
         let base: URL
-        if let override = environment["MARKDOWN_NOTEPAD_SUPPORT_DIR"], !override.isEmpty {
-            base = URL(fileURLWithPath: override, isDirectory: true)
+        if let supportOverride {
+            base = supportOverride
         } else if testing {
             base = FileManager.default.temporaryDirectory
                 .appendingPathComponent("MarkdownNotepadUITests", isDirectory: true)
@@ -47,11 +49,11 @@ final class WorkspaceCoordinator: ObservableObject {
         } else {
             base = RecentDocumentsStore.defaultFileURL().deletingLastPathComponent()
         }
-        supportDirectory = base
         recentStore = RecentDocumentsStore(fileURL: base.appendingPathComponent("RecentDocuments.json"))
         restorationStore = SessionRestorationStore(fileURL: base.appendingPathComponent("OpenDocuments.json"))
         recoveryStore = RecoveryStore(directory: base.appendingPathComponent("Recovery", isDirectory: true))
-        recentDocuments = recentStore.load()
+        modeStore = EditorModeStore(fileURL: base.appendingPathComponent("EditorMode.json"))
+        recentDocuments = testing ? [] : recentStore.load()
     }
 
     // MARK: - Session lifecycle
@@ -90,13 +92,24 @@ final class WorkspaceCoordinator: ObservableObject {
             workspace: self,
             openURL: url,
             recoveredSnapshot: snapshot,
-            recoveryStore: recoveryStore
+            recoveryStore: recoveryStore,
+            initialMode: defaultEditorMode
         )
         register(session)
         if let path = snapshot?.fileURL {
             recordRecent(URL(fileURLWithPath: path))
         }
         return session
+    }
+
+    /// Mode used by new windows and restored after relaunch.
+    var defaultEditorMode: EditorMode {
+        modeStore.load() ?? EditorMode.fallback
+    }
+
+    /// Persists the last user-chosen mode as the app-wide default.
+    func recordEditorMode(_ mode: EditorMode) {
+        try? modeStore.save(mode)
     }
 
     private func register(_ session: DocumentSession) {
@@ -236,12 +249,18 @@ final class WorkspaceCoordinator: ObservableObject {
         alert.informativeText = """
         A plain-text Markdown editor.
 
-        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘W close
+        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘R rename · ⇧⌘M save location · ⌘W close
         Edit: ⌘F find · ⌥⌘F find and replace · ⌘G next match · ⌘L go to line
-        View: preview ⇧⌘P, word wrap, zoom, full screen
+        View: modes ⌃⌘1 plain · ⌃⌘2 panels · ⌃⌘3 WYSIWYG, preview ⇧⌘P,
+              word wrap, zoom, full screen
         Window: tab overview · merge all windows
 
+        Double-click a window title to rename the document, or use the chevron
+        beside the title to choose its folder. Existing files are never
+        overwritten silently.
+
         Files are saved as plain UTF-8 text. Markdown syntax is never rewritten.
+        The last editor mode you use becomes the default for new windows.
         """
         alert.addButton(withTitle: "OK")
         alert.runModal()

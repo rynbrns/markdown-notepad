@@ -1,4 +1,5 @@
 import AppKit
+import MarkdownCore
 import SwiftUI
 
 private struct DocumentSessionFocusedKey: FocusedValueKey {
@@ -22,6 +23,7 @@ struct MarkdownNotepadApp: App {
         }
         .commands {
             DocumentCommands()
+            MarkdownFormattingCommands()
         }
     }
 }
@@ -87,6 +89,18 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("s", modifiers: [.command, .shift])
             .disabled(session == nil)
 
+            Button("Rename…") {
+                session?.beginRenaming()
+            }
+            .keyboardShortcut("r")
+            .disabled(session == nil)
+
+            Button("Choose Save Location…") {
+                session?.presentSaveLocationPicker()
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
             Button("Revert to Saved") {
                 session?.revertToSaved()
             }
@@ -138,6 +152,21 @@ struct DocumentCommands: Commands {
         }
 
         CommandGroup(after: .toolbar) {
+            Divider()
+
+            Menu("Editor Mode") {
+                ForEach(EditorMode.allCases, id: \.self) { mode in
+                    Toggle(mode.title, isOn: Binding(
+                        get: { session?.editorMode == mode },
+                        set: { _ in session?.setEditorMode(mode) }
+                    ))
+                    .keyboardShortcut(modeShortcut(for: mode))
+                    .disabled(session == nil)
+                }
+                Divider()
+                Text("The last mode you use becomes the default.")
+            }
+
             Divider()
 
             Toggle("Preview", isOn: Binding(
@@ -200,6 +229,17 @@ struct DocumentCommands: Commands {
             Button("Markdown Notepad Help") {
                 workspace.showHelp()
             }
+        }
+    }
+
+    private func modeShortcut(for mode: EditorMode) -> KeyboardShortcut {
+        switch mode {
+        case .plainText:
+            return KeyboardShortcut("1", modifiers: [.control, .command])
+        case .panels:
+            return KeyboardShortcut("2", modifiers: [.control, .command])
+        case .wysiwyg:
+            return KeyboardShortcut("3", modifiers: [.control, .command])
         }
     }
 }

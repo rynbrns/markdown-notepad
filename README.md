@@ -159,6 +159,72 @@ default, regex toggle, replace-all, match highlighting) are available.
   regex searches.
 - **Appearance:** semantic AppKit colours throughout, so light/dark mode follows
   the system; UI tests force dark mode and capture a screenshot.
+- **Interactive title bar:** the window title is a native title-bar accessory.
+  Double-click it (or press ⌘R / File > Rename…) to edit the document name;
+  Return commits and Escape cancels. A disclosure chevron beside the title opens
+  a popover showing the current folder and a **Choose Folder…** button backed by
+  a native `NSOpenPanel` directory picker. The file is moved (or, for an
+  untitled document, saved) only after the move/save confirmation.
+- **Rename and save-location safety:** names are normalized to one `.md`
+  filename (`notes` → `notes.md`; an existing extension is kept, so
+  `notes.txt` → `notes.txt.md`). Slashes, colons, control characters, empty
+  names, and hidden-dot names are rejected. Rename and folder moves use
+  no-clobber semantics: if the destination exists, the operation is refused and
+  neither file is changed. Untitled documents remember the new name and use it
+  on the next save. `representedURL` and the window `title` stay in sync for
+  tabs, the Window menu, and VoiceOver.
+
+## Editor modes
+
+The same Markdown document can be shown in three modes. Switching never
+rewrites the buffer, so the Markdown round-trips byte-for-byte and the cursor,
+selection, scroll position, undo history, and unsaved changes are preserved.
+
+| Mode | Shortcut | What it shows |
+| --- | --- | --- |
+| Plain Text | ⌃⌘1 | Raw Markdown source with syntax colouring, no preview |
+| Panels | ⌃⌘2 | Source editor beside the live rendered GFM preview (M3 split view) |
+| WYSIWYG | ⌃⌘3 | Rendered rich text with Markdown markers hidden while editing |
+
+- **Three switch paths:** compact icon buttons in the status bar, **View >
+  Editor Mode** in the menu bar, and the direct ⌃⌘1/2/3 shortcuts. All three
+  stay in sync and the active mode is named in the status bar.
+- **Persisted default:** the last mode you choose becomes the default for new
+  windows and is restored on the next launch
+  (`~/Library/Application Support/MarkdownNotepad/EditorMode.json`).
+- **⇧⌘P / View > Preview** still toggles the Panels preview off and back on,
+  returning to the previous non-Panels mode.
+- **WYSIWYG is source-preserving:** it hides inline markers such as `**`, `*`,
+  `` ` ``, `~~`, heading `#`s, blockquote `>`s, and code fences by styling
+  them at near-zero width and transparent colour. List bullets and task boxes
+  remain as source markers; tables and code blocks are styled but not converted.
+  Because no text is converted to a separate rich-text model, there is no
+  Markdown round-trip to corrupt.
+
+## Markdown formatting shortcuts
+
+The **Editor** menu exposes every formatting command with its shortcut glyph.
+Commands work on the current selection, or on the current line when there is no
+selection, and a multi-line selection is transformed line by line. Each command
+is one undoable edit, so ⌘Z restores the previous text exactly.
+
+| Action | Shortcut | Behaviour |
+| --- | --- | --- |
+| Bold | ⌘B | Toggles `**` around the selection or inserts a pair at the caret |
+| Italic | ⌘I | Toggles `*`; applying it to bold text produces `***` |
+| Strikethrough | ⇧⌘X | Toggles `~~` |
+| Inline code | ⌘\` | Toggles a backtick span |
+| Code block | ⌥⌘C | Wraps the selected lines in a fenced block, or removes the surrounding fences |
+| Heading 1–6 | ⌘1 … ⌘6 | Sets the level on every selected non-blank line; pressing the same level again removes the heading |
+| Unordered list | ⇧⌘8 | Toggles `- ` on the selected non-blank lines |
+| Ordered list | ⇧⌘7 | Numbers the selected lines from 1, or continues the preceding list number |
+| Increase list indent | ⌘] | Adds two leading spaces to selected list items |
+| Decrease list indent | ⌘[ | Removes up to two leading spaces from selected list items |
+| Blockquote | ⌥⌘Q | Toggles `> ` on the selected non-blank lines |
+| Insert link | ⌘K | Wraps the selection as `[text](url)` and selects the `url` placeholder; if the pasteboard holds an http/https/mailto URL, that destination is used |
+
+Inside a list, **Tab** and **Shift-Tab** also increase and decrease nesting by two
+spaces; everywhere else they keep the standard text-view behaviour.
 
 ## File-format guarantees (M1)
 
@@ -310,8 +376,8 @@ thread and debounced.
 
 These are deliberate v1 boundaries, not defects:
 
-- **No WYSIWYG typing.** v1 is a plain-text Markdown notepad with a live rendered
-  preview. Hiding markers while typing is a v2 decision.
+- WYSIWYG is a visual mode over the same plain text, not a separate document
+  format; inline markers are hidden while typing but are never removed.
 - No cloud sync, collaboration, iOS/iPadOS app, or App Store distribution.
 - No print/PDF export, themes, plugins, or telemetry.
 - No image paste or drag-in; images already on disk render in the preview.
@@ -329,3 +395,6 @@ These are deliberate v1 boundaries, not defects:
 - Distribution is ad-hoc signed by default. The first launch needs
   right-click → Open unless an Apple Developer notarization credential is
   supplied.
+- Double-clicking this app's title bar starts a rename instead of the system
+  "double-click title bar to zoom/minimize" action, matching the product
+  request. The title bar remains draggable for moving the window.

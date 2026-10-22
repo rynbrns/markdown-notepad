@@ -48,20 +48,18 @@ struct ContentView: View {
                 Divider()
             }
 
-            if session.isPreviewVisible {
-                HSplitView {
-                    MarkdownTextView(session: session)
-                        .frame(minWidth: 320)
+            HSplitView {
+                MarkdownTextView(session: session)
+                    .frame(minWidth: 320)
+                if session.editorMode == .panels {
                     MarkdownPreviewView(
                         text: session.text,
                         documentURL: session.previewBaseURL
                     )
                     .frame(minWidth: 320)
                 }
-                .accessibilityIdentifier("splitPreview")
-            } else {
-                MarkdownTextView(session: session)
             }
+            .accessibilityIdentifier(session.editorMode == .panels ? "splitPreview" : "editorSurface")
 
             Divider()
 
@@ -123,6 +121,9 @@ struct ContentView: View {
             Text("\(session.statistics.lineCount) lines")
             Text("·")
             Text(session.formatLabel)
+            Text("·")
+            Text(session.modeLabel)
+                .accessibilityIdentifier("activeMode")
             if session.isPreviewVisible {
                 Text("·")
                 Text("Preview")
@@ -130,6 +131,7 @@ struct ContentView: View {
                     .accessibilityLabel("Preview pane visible")
             }
             Spacer()
+            EditorModeSwitcher(session: session)
             if session.isDirty {
                 Text("Edited")
                     .foregroundStyle(.orange)
