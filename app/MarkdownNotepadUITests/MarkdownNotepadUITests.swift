@@ -246,6 +246,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(app.menuBars.menuItems["Unordered List"].exists,
                       "The Editor menu should expose list commands")
         app.typeKey(.escape, modifierFlags: [])
+        editor.click()
 
         app.typeKey("a", modifierFlags: .command)
         app.typeKey("b", modifierFlags: .command)
@@ -359,12 +360,25 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private func waitForMode(_ app: XCUIApplication, _ title: String, timeout: TimeInterval = 5) -> Bool {
-        let marker = app.staticTexts["activeMode"]
-        guard marker.waitForExistence(timeout: timeout) else { return false }
-        print("MODE WAIT expected '\(title)' actual '\(marker.label)'")
-        let predicate = NSPredicate(format: "label == %@", title)
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: marker)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        guard let rawValue = modeRawValue(for: title) else {
+            XCTFail("Unknown editor mode \(title)")
+            return false
+        }
+        let marker = app.descendants(matching: .any)["activeMode-\(rawValue)"].firstMatch
+        return marker.waitForExistence(timeout: timeout)
+    }
+
+    private func modeRawValue(for title: String) -> String? {
+        switch title {
+        case "Plain Text":
+            return "plainText"
+        case "Panels":
+            return "panels"
+        case "WYSIWYG":
+            return "wysiwyg"
+        default:
+            return nil
+        }
     }
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {
