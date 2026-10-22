@@ -45,7 +45,7 @@ final class EditorModeTests: XCTestCase {
         )
         try Data("not a mode".utf8).write(to: store.fileURL)
         XCTAssertNil(store.load())
-        XCTAssertEqual(EditorMode.fallback, .panels)
+        XCTAssertEqual(EditorMode.fallback, .plainText)
     }
 
     func testClearRemovesThePreference() throws {

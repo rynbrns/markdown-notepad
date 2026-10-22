@@ -90,6 +90,9 @@ selection, scroll position, undo history, and unsaved changes are preserved.
 | Panels | ⌃⌘2 | Source editor beside the live rendered GFM preview (M3 split view) |
 | WYSIWYG | ⌃⌘3 | Rendered rich text with Markdown markers hidden while editing |
 
+A fresh install starts in Plain Text. The last mode you choose becomes the
+default for new windows and is restored on the next launch.
+
 - **Three switch paths:** compact icon buttons in the status bar, **View >
   Editor Mode** in the menu bar, and the direct ⌃⌘1/2/3 shortcuts. All three
   stay in sync and the active mode is named in the status bar.

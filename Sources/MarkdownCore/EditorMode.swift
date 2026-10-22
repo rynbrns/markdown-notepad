@@ -37,7 +37,7 @@ public enum EditorMode: String, CaseIterable, Codable, Hashable, Sendable {
     }
 
     /// The mode used when no preference has been stored yet.
-    public static let fallback: EditorMode = .panels
+    public static let fallback: EditorMode = .plainText
 }
 
 /// Durable, single-value preference for the editor mode.

@@ -286,7 +286,13 @@ final class MarkdownNotepadUITests: XCTestCase {
         editor.typeText("# Title\n\nA **bold** line and [a link](https://example.com).")
         let source = editor.value as? String
 
-        XCTAssertTrue(waitForMode(app, "Panels"), "An unset preference should start in Panels")
+        XCTAssertTrue(waitForMode(app, "Plain Text"),
+                      "An unset preference should start in Plain Text")
+
+        app.typeKey("2", modifierFlags: [.control, .command])
+        XCTAssertTrue(waitForMode(app, "Panels"), "⌃⌘2 should switch to Panels")
+        XCTAssertTrue(app.staticTexts["previewVisible"].waitForExistence(timeout: 10),
+                      "Panels should show the live preview")
 
         app.typeKey("1", modifierFlags: [.control, .command])
         XCTAssertTrue(waitForMode(app, "Plain Text"), "⌃⌘1 should switch to Plain Text")
@@ -354,6 +360,12 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {
+        let existing = app.textViews["editor"].firstMatch
+        if existing.waitForExistence(timeout: 3) {
+            existing.click()
+            return existing
+        }
+
         app.menuBars.menuBarItems["File"].click()
         let newItem = app.menuBars.menuItems["New"]
         if newItem.waitForExistence(timeout: 3) {
