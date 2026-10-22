@@ -125,7 +125,6 @@ struct ContentView: View {
             Text(session.formatLabel)
             Text("·")
             Text(session.modeLabel)
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(session.modeLabel)
                 .accessibilityIdentifier("activeMode")
             if session.isPreviewVisible {
