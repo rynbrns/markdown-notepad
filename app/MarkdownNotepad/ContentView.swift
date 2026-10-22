@@ -1,18 +1,42 @@
 import MarkdownCore
 import SwiftUI
 
+/// Root view for one editor window.
+struct DocumentWindowView: View {
+    @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var workspace = WorkspaceCoordinator.shared
+    @StateObject private var session: DocumentSession
+
+    init() {
+        _session = StateObject(wrappedValue: WorkspaceCoordinator.shared.makeInitialSession())
+    }
+
+    var body: some View {
+        ContentView(session: session)
+            .frame(minWidth: 640, minHeight: 420)
+            .focusedSceneValue(\.documentSession, session)
+            .background(
+                WindowAccessor { window in
+                    session.attach(window: window)
+                }
+            )
+            .task {
+                workspace.openWindowHandler = { id in
+                    openWindow(id: id)
+                }
+                let extraWindows = workspace.consumeRestorationSpawnCount()
+                for _ in 0..<extraWindows {
+                    openWindow(id: WorkspaceCoordinator.editorWindowID)
+                }
+            }
+    }
+}
+
 struct ContentView: View {
-    @ObservedObject private var session = DocumentSession.shared
+    @ObservedObject var session: DocumentSession
 
     private var document: MarkdownDocument {
         MarkdownDocument(text: session.text)
-    }
-
-    private var editorText: Binding<String> {
-        Binding(
-            get: { session.text },
-            set: { session.userEdited($0) }
-        )
     }
 
     var body: some View {
@@ -22,29 +46,16 @@ struct ContentView: View {
                 Divider()
             }
 
-            MarkdownTextView(text: editorText)
+            if session.find.isVisible {
+                FindBarView(session: session, controller: session.find)
+                Divider()
+            }
+
+            MarkdownTextView(session: session)
 
             Divider()
 
-            HStack(spacing: 12) {
-                Text("\(document.wordCount) words")
-                Text("·")
-                Text("\(document.lineCount) lines")
-                Text("·")
-                Text(session.formatLabel)
-                Spacer()
-                if session.isDirty {
-                    Text("Edited")
-                        .foregroundStyle(.orange)
-                }
-                Text(session.displayName)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            statusBar
         }
         .navigationTitle(session.windowTitle)
         .alert(
@@ -91,5 +102,29 @@ struct ContentView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.yellow.opacity(0.15))
+    }
+
+    private var statusBar: some View {
+        HStack(spacing: 12) {
+            Text("\(document.wordCount) words")
+            Text("·")
+            Text("\(document.lineCount) lines")
+            Text("·")
+            Text(session.formatLabel)
+            Spacer()
+            if session.isDirty {
+                Text("Edited")
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("dirtyIndicator")
+            }
+            Text(session.displayName)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .accessibilityIdentifier("documentName")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
     }
 }

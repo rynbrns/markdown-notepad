@@ -3,14 +3,14 @@ import SwiftUI
 
 /// A TextKit 2 backed plain-text editor hosted in SwiftUI.
 ///
-/// The app uses `NSTextView` rather than SwiftUI's `TextEditor` so later
-/// milestones can attach an `NSTextLayoutManager`-based highlighter and keep
-/// precise control over selection, undo, and editor metrics.
+/// The app uses `NSTextView` rather than SwiftUI's `TextEditor` so the find
+/// bar, word wrap, zoom, undo, and later M3 highlighting can attach to the
+/// real text engine.
 struct MarkdownTextView: NSViewRepresentable {
-    @Binding var text: String
+    @ObservedObject var session: DocumentSession
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+    func makeCoordinator() -> MarkdownTextController {
+        MarkdownTextController(session: session)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -26,15 +26,15 @@ struct MarkdownTextView: NSViewRepresentable {
 
         let textView = NSTextView(frame: .zero, textContainer: container)
         textView.delegate = context.coordinator
-        textView.string = text
+        textView.string = session.text
         textView.isRichText = false
         textView.allowsUndo = true
-        textView.usesFindBar = true
+        textView.usesFindBar = false
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
-        textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
+        textView.font = .monospacedSystemFont(ofSize: session.fontSize, weight: .regular)
         textView.textColor = .textColor
         textView.backgroundColor = .textBackgroundColor
         textView.textContainerInset = NSSize(width: 18, height: 18)
@@ -44,36 +44,79 @@ struct MarkdownTextView: NSViewRepresentable {
             height: CGFloat.greatestFiniteMagnitude
         )
         textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
+        textView.isHorizontallyResizable = !session.wordWrap
         textView.autoresizingMask = [.width]
+        textView.setAccessibilityIdentifier("editor")
+
+        context.coordinator.textView = textView
 
         let scrollView = NSScrollView()
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = !session.wordWrap
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
+
+        session.registerTextController(context.coordinator)
+        applyWordWrap(to: textView, scrollView: scrollView)
+
+        DispatchQueue.main.async {
+            if textView.window == nil {
+                DispatchQueue.main.async {
+                    textView.window?.makeFirstResponder(textView)
+                }
+            } else {
+                textView.window?.makeFirstResponder(textView)
+            }
+        }
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
-        guard textView.string != text else { return }
-        textView.string = text
-        textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        context.coordinator.textView = textView
+
+        if textView.string != session.text {
+            textView.string = session.text
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+        }
+        let desiredFont = NSFont.monospacedSystemFont(ofSize: session.fontSize, weight: .regular)
+        if textView.font != desiredFont {
+            textView.font = desiredFont
+        }
+        applyWordWrap(to: textView, scrollView: scrollView)
     }
 
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        private let text: Binding<String>
-
-        init(text: Binding<String>) {
-            self.text = text
+    private func applyWordWrap(to textView: NSTextView, scrollView: NSScrollView) {
+        let wraps = session.wordWrap
+        textView.isHorizontallyResizable = !wraps
+        scrollView.hasHorizontalScroller = !wraps
+        if wraps {
+            textView.textContainer?.widthTracksTextView = true
+            textView.textContainer?.containerSize = NSSize(
+                width: scrollView.contentSize.width,
+                height: CGFloat.greatestFiniteMagnitude
+            )
+        } else {
+            textView.textContainer?.widthTracksTextView = false
+            textView.textContainer?.containerSize = NSSize(
+                width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude
+            )
         }
+    }
+}
 
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            if text.wrappedValue != textView.string {
-                text.wrappedValue = textView.string
-            }
-        }
+final class MarkdownTextController: NSObject, NSTextViewDelegate {
+    weak var textView: NSTextView?
+    private unowned let session: DocumentSession
+
+    init(session: DocumentSession) {
+        self.session = session
+    }
+
+    func textDidChange(_ notification: Notification) {
+        guard let textView = notification.object as? NSTextView else { return }
+        session.userEdited(textView.string)
     }
 }
