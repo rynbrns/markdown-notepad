@@ -72,7 +72,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         let secondEditor = app.textViews["editor"].firstMatch
         XCTAssertTrue(secondEditor.waitForExistence(timeout: 5))
         app.menuBars.menuBarItems["Window"].click()
-        let merge = app.menuBars.menuItems["Merge All Windows"]
+        let merge = app.menuBars.menuItems["Merge All Windows"].firstMatch
         if merge.waitForExistence(timeout: 3) {
             merge.click()
         } else {
