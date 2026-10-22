@@ -81,6 +81,7 @@ jobs:
           ./scripts/verify-app-icon.sh "$app"
 
       - name: Capture app icon evidence (Dock/Finder)
+        continue-on-error: true
         env:
           SCREENSHOT_DIR: /tmp/markdown-notepad-ui-screenshots
           ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
