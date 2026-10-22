@@ -137,7 +137,8 @@ final class MarkdownNotepadUITests: XCTestCase {
         capture(app.windows.firstMatch, name: "10-preview-light")
 
         app.typeKey("p", modifierFlags: [.command, .shift])
-        XCTAssertTrue(marker.waitForNonExistence(timeout: 5), "⇧⌘P should hide the preview pane")
+        let hidden = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: marker)
+        XCTAssertEqual(XCTWaiter().wait(for: [hidden], timeout: 5), .completed, "⇧⌘P should hide the preview pane")
 
         app.typeKey("p", modifierFlags: [.command, .shift])
         XCTAssertTrue(marker.waitForExistence(timeout: 10), "⇧⌘P should reopen the preview pane")
