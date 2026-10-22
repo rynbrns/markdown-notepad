@@ -29,7 +29,7 @@ final class DocumentSession: ObservableObject {
     private var format = TextFileFormat()
     private var baseline: FileFingerprint?
     private var untitledID = UUID()
-    private var idleSnapshotWork: DispatchWorkItem?
+    private var idleSnapshotTimer: Timer?
     private var periodicSnapshotTimer: Timer?
     private var isLoading = false
 
@@ -260,24 +260,39 @@ final class DocumentSession: ObservableObject {
     }
 
     private func scheduleIdleSnapshot() {
-        idleSnapshotWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            Task { @MainActor in self?.snapshotIfDirty() }
-        }
-        idleSnapshotWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+        idleSnapshotTimer?.invalidate()
+        idleSnapshotTimer = Timer.scheduledTimer(
+            timeInterval: 2,
+            target: self,
+            selector: #selector(idleSnapshotFired),
+            userInfo: nil,
+            repeats: false
+        )
     }
 
     private func startPeriodicSnapshots() {
         guard periodicSnapshotTimer == nil else { return }
-        periodicSnapshotTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.snapshotIfDirty() }
-        }
+        periodicSnapshotTimer = Timer.scheduledTimer(
+            timeInterval: 30,
+            target: self,
+            selector: #selector(periodicSnapshotFired),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func idleSnapshotFired() {
+        idleSnapshotTimer = nil
+        snapshotIfDirty()
+    }
+
+    @objc private func periodicSnapshotFired() {
+        snapshotIfDirty()
     }
 
     private func stopSnapshots() {
-        idleSnapshotWork?.cancel()
-        idleSnapshotWork = nil
+        idleSnapshotTimer?.invalidate()
+        idleSnapshotTimer = nil
         periodicSnapshotTimer?.invalidate()
         periodicSnapshotTimer = nil
     }
