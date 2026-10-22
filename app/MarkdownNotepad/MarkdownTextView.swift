@@ -47,6 +47,8 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = !session.wordWrap
         textView.autoresizingMask = [.width]
         textView.setAccessibilityIdentifier("editor")
+        textView.setAccessibilityLabel("Markdown editor")
+        textView.setAccessibilityHelp("Type Markdown or plain text. Press Shift Command P to toggle the rendered preview.")
 
         context.coordinator.attach(textView: textView)
 
@@ -79,7 +81,7 @@ struct MarkdownTextView: NSViewRepresentable {
         if textView.string != session.text {
             textView.string = session.text
             textView.setSelectedRange(NSRange(location: 0, length: 0))
-            context.coordinator.highlighter.textDidChange(textView.string)
+            context.coordinator.highlighter.textDidChange(textView.string, hint: nil)
         }
         let desiredFont = NSFont.monospacedSystemFont(ofSize: session.fontSize, weight: .regular)
         if textView.font != desiredFont {
@@ -130,6 +132,6 @@ final class MarkdownTextController: NSObject, NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
         session.userEdited(textView.string)
-        highlighter.textDidChange(textView.string)
+        highlighter.textDidChange(textView.string, hint: textView.selectedRange().location)
     }
 }
