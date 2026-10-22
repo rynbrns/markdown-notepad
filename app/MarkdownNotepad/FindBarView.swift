@@ -108,12 +108,9 @@ struct FindBarView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Text("\(controller.currentIndex + 1) of \(controller.matchCount)")
+            Text(verbatim: "\(controller.currentIndex + 1) of \(controller.matchCount)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .accessibilityIdentifier("findMatchCount")
-                .accessibilityLabel(Text("\(controller.currentIndex + 1) of \(controller.matchCount)"))
         }
     }
 }
