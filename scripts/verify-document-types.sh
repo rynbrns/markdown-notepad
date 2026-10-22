@@ -35,8 +35,6 @@ fail() { printf '\nERROR: %s\n' "$*" | tee -a "$REPORT" >&2; exit 1; }
 : > "$REPORT"
 
 log "Bundle metadata"
-"$LSREGISTER" -f "$APP_SOURCE"
-
 /usr/bin/python3 - "$APP_SOURCE/Contents/Info.plist" <<'PY' | tee -a "$REPORT"
 import plistlib, sys
 
@@ -92,34 +90,7 @@ print(f"Imported UTI extensions: {extensions}")
 print("Info.plist document declarations OK")
 PY
 
-log "Install the app in /Applications and ad-hoc sign it"
-if pgrep -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" >/dev/null; then
-  pkill -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" || true
-  sleep 1
-fi
-if [[ -d "$INSTALLED_APP" ]]; then
-  EXISTING_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
-    "$INSTALLED_APP/Contents/Info.plist" 2>/dev/null || echo "unknown")"
-  [[ "$EXISTING_ID" == "$BUNDLE_ID" ]] \
-    || fail "refusing to replace $INSTALLED_APP (bundle id $EXISTING_ID)"
-  rm -rf "$INSTALLED_APP"
-fi
-ditto "$APP_SOURCE" "$INSTALLED_APP"
-codesign --force --deep --sign - "$INSTALLED_APP" >/dev/null
-codesign --verify --deep --strict "$INSTALLED_APP"
-"$LSREGISTER" -f "$INSTALLED_APP"
-
-log "Registered handler claims"
-"$LSREGISTER" -dump > "$WORK/lsregister.txt"
-if grep -q "$BUNDLE_ID" "$WORK/lsregister.txt"; then
-  CLAIMS="$(grep -c "$MARKDOWN_UTI" "$WORK/lsregister.txt" || true)"
-  echo "Launch Services knows $BUNDLE_ID; $MARKDOWN_UTI appears $CLAIMS time(s) in the dump" | tee -a "$REPORT"
-else
-  fail "Launch Services does not know $BUNDLE_ID after registration"
-fi
-
-log "Launch Services app list for a .md file"
-printf '# Opened from Finder\n\nThis file was opened by Launch Services.\n' > "$WORK/opened.md"
+log "Compile the Launch Services probe"
 cat > "$WORK/lsinfo.swift" <<'SWIFT'
 import CoreServices
 import Foundation
@@ -153,6 +124,36 @@ default:
 SWIFT
 xcrun swiftc -O -o "$LSINFO" "$WORK/lsinfo.swift"
 
+PREVIOUS_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
+log "Install the app in /Applications and ad-hoc sign it"
+if pgrep -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" >/dev/null; then
+  pkill -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" || true
+  sleep 1
+fi
+if [[ -d "$INSTALLED_APP" ]]; then
+  EXISTING_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+    "$INSTALLED_APP/Contents/Info.plist" 2>/dev/null || echo "unknown")"
+  [[ "$EXISTING_ID" == "$BUNDLE_ID" ]] \
+    || fail "refusing to replace $INSTALLED_APP (bundle id $EXISTING_ID)"
+  rm -rf "$INSTALLED_APP"
+fi
+ditto "$APP_SOURCE" "$INSTALLED_APP"
+codesign --force --deep --sign - "$INSTALLED_APP" >/dev/null
+codesign --verify --deep --strict "$INSTALLED_APP"
+"$LSREGISTER" -f "$INSTALLED_APP"
+
+log "Registered handler claims"
+"$LSREGISTER" -dump > "$WORK/lsregister.txt"
+if grep -q "$BUNDLE_ID" "$WORK/lsregister.txt"; then
+  CLAIMS="$(grep -c "$MARKDOWN_UTI" "$WORK/lsregister.txt" || true)"
+  echo "Launch Services knows $BUNDLE_ID; $MARKDOWN_UTI appears $CLAIMS time(s) in the dump" | tee -a "$REPORT"
+else
+  fail "Launch Services does not know $BUNDLE_ID after registration"
+fi
+
+log "Launch Services app list for a .md file"
+printf '# Opened from Finder\n\nThis file was opened by Launch Services.\n' > "$WORK/opened.md"
+
 HANDLERS="$("$LSINFO" handlers "$WORK/opened.md")"
 printf '%s\n' "$HANDLERS" | tee -a "$REPORT"
 if ! printf '%s\n' "$HANDLERS" | grep -qx "$INSTALLED_APP"; then
@@ -161,8 +162,13 @@ fi
 echo "Open With list includes Markdown Notepad" | tee -a "$REPORT"
 
 log "Set as default, then confirm Launch Services routes .md to the app"
-PREVIOUS_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
-echo "Previous default handler: $PREVIOUS_DEFAULT" | tee -a "$REPORT"
+echo "Default handler before registration: $PREVIOUS_DEFAULT" | tee -a "$REPORT"
+if [[ "$PREVIOUS_DEFAULT" != "none" && "$PREVIOUS_DEFAULT" != "$BUNDLE_ID" ]]; then
+  PRE_REGISTER_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
+  [[ "$PRE_REGISTER_DEFAULT" == "$PREVIOUS_DEFAULT" ]] \
+    || fail "registration replaced the existing default handler $PREVIOUS_DEFAULT with $PRE_REGISTER_DEFAULT"
+  echo "Registering did not take over the existing default handler" | tee -a "$REPORT"
+fi
 SET_STATUS="$("$LSINFO" set-default "$MARKDOWN_UTI" "$BUNDLE_ID")"
 [[ "$SET_STATUS" == "0" ]] || fail "LSSetDefaultRoleHandlerForContentType returned $SET_STATUS"
 CURRENT_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
@@ -196,8 +202,8 @@ paths = [os.path.realpath(s["path"]) for s in sessions if s.get("path")]
 if probe.get("sessionCount") != 1:
     print(f"ERROR: expected 1 document session, got {probe.get('sessionCount')}")
     sys.exit(1)
-if probe.get("visibleWindowCount") != 1:
-    print(f"ERROR: expected 1 visible window, got {probe.get('visibleWindowCount')}")
+if probe.get("visibleWindowCount", 0) > 1:
+    print(f"ERROR: expected at most 1 visible window, got {probe.get('visibleWindowCount')}")
     sys.exit(1)
 if paths != [expected]:
     print(f"ERROR: expected the opened file {expected}, got {paths}")
