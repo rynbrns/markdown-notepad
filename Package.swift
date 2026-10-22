@@ -11,6 +11,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "MarkdownCore"),
-        .testTarget(name: "MarkdownCoreTests", dependencies: ["MarkdownCore"])
+        .testTarget(
+            name: "MarkdownCoreTests",
+            dependencies: ["MarkdownCore"],
+            resources: [.copy("Fixtures")]
+        )
     ]
 )

@@ -1,0 +1,2 @@
+# Golden files must keep their exact bytes (BOM, CRLF, CR, mixed endings).
+Tests/MarkdownCoreTests/Fixtures/** -text
