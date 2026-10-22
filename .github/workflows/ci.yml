@@ -80,9 +80,16 @@ jobs:
           ./scripts/verify-document-types.sh \
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
 
+      - name: Verify app icon integration
+        run: |
+          app="$(find app/.derivedData/Build/Products/Debug -maxdepth 1 -type d -name 'MarkdownNotepad.app' -print -quit)"
+          test -n "$app"
+          ./scripts/verify-app-icon.sh "$app"
+
       - name: Run XCUITest smoke and screenshot suite
         env:
           SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
+          ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
         run: |
           set -o pipefail
           rm -rf app/TestResults.xcresult
@@ -107,4 +114,5 @@ jobs:
             app/TestResults.xcresult
             app/xcodebuild-test.log
             app/document-type-verification.md
+            /tmp/markdown-notepad-ui-screenshots
           if-no-files-found: warn

@@ -48,6 +48,9 @@ codesign -dv --verbose=4 "$APP" 2>&1 | tee "$BUILD_DIR/codesign-copy.txt"
 grep -q 'Signature=adhoc' "$BUILD_DIR/codesign-copy.txt" \
   || echo "Note: copied app is not ad-hoc signed (Developer ID path)."
 
+log "Verify app icon in the copied bundle"
+"$ROOT/scripts/verify-app-icon.sh" "$APP"
+
 log "Show quarantined-free bundle metadata"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Contents/Info.plist"

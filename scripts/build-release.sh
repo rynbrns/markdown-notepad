@@ -77,6 +77,9 @@ if [[ "$SIGNING_KIND" == "ad-hoc" ]]; then
     || { echo "ERROR: expected an ad-hoc signature" >&2; exit 1; }
 fi
 
+log "Verify app icon"
+"$ROOT/scripts/verify-app-icon.sh" "$APP"
+
 log "Verify bundle metadata"
 APP_PLIST="$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST"
