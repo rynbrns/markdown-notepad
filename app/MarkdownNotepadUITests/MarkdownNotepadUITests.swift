@@ -6,6 +6,86 @@ final class MarkdownNotepadUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    // MARK: - Launch
+
+    func test00ColdLaunchOpensOneBlankWindowWithEditorFocus() throws {
+        let app = launchApp()
+        addTeardownBlock { app.terminate() }
+
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10), "Cold launch should present a window")
+
+        let editor = app.textViews["editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10), "Cold launch should present an editor")
+        XCTAssertEqual(app.windows.count, 1, "Cold launch should create exactly one window")
+        XCTAssertEqual(app.staticTexts["documentName"].firstMatch.value as? String, "Untitled",
+                       "The launch window should be untitled")
+        XCTAssertEqual(editor.value as? String, "", "The launch window should be empty")
+
+        app.typeText("Cold launch focus")
+        XCTAssertTrue((editor.value as? String)?.contains("Cold launch focus") == true,
+                      "The new window should start with keyboard focus in the editor")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    func test00bReopenWithNoWindowsOpensOneBlankWindow() throws {
+        let app = launchApp()
+        addTeardownBlock { app.terminate() }
+        let editor = app.textViews["editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10), "Cold launch should present an editor")
+
+        // The blank untitled window is clean, so ⌘W closes it without a prompt.
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(waitForWindowCount(0, in: app, timeout: 10),
+                      "Closing the only clean window should leave the app running with no windows")
+
+        // Dock click / re-open while the app is running with no windows.
+        reopenRunningApp()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10),
+                      "Reopening with no windows should present a blank window")
+        XCTAssertEqual(app.windows.count, 1, "Reopening should create exactly one window")
+        XCTAssertTrue(app.textViews["editor"].firstMatch.waitForExistence(timeout: 10),
+                      "The reopened window should be an editor")
+        XCTAssertEqual(app.staticTexts["documentName"].firstMatch.value as? String, "Untitled",
+                       "The reopened window should be a new untitled document")
+        app.terminate()
+    }
+
+    func test00cLaunchingWithFileOpensOnlyThatFile() throws {
+        // CI creates this fixture in a shared location; XCUITest's sandbox
+        // cannot write to /tmp and the app cannot read the runner container.
+        let file = URL(fileURLWithPath: "/tmp/markdown-notepad-rya16/opened.md")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path),
+                      "Missing UI-test fixture: \(file.path)")
+
+        let app = launchApp(openingFile: file)
+        addTeardownBlock { app.terminate() }
+
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10),
+                      "Launching with a file should present a window")
+        XCTAssertEqual(app.windows.count, 1,
+                       "Launching with a file should not leave an extra blank window")
+
+        let name = app.staticTexts["documentName"].firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "The opened file should be shown")
+        let loaded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", "opened"),
+            object: name
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [loaded], timeout: 10), .completed,
+                       "Launching with a file should load it")
+
+        let editor = app.textViews["editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10), "The file window should contain an editor")
+        XCTAssertTrue((editor.value as? String)?.contains("Opened from Finder") == true,
+                      "The opened file content should be visible in the editor")
+        app.terminate()
+    }
+
     // MARK: - Smoke
 
     func test01SmokeLaunchTypeCloseUnsavedPrompt() throws {
@@ -345,7 +425,11 @@ final class MarkdownNotepadUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func launchApp(dark: Bool = false, supportDirectory: URL? = nil) -> XCUIApplication {
+    private func launchApp(
+        dark: Bool = false,
+        supportDirectory: URL? = nil,
+        openingFile: URL? = nil
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["MARKDOWN_NOTEPAD_UI_TESTING"] = "1"
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
@@ -354,6 +438,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         }
         if let supportDirectory {
             app.launchEnvironment["MARKDOWN_NOTEPAD_SUPPORT_DIR"] = supportDirectory.path
+        }
+        if let openingFile {
+            app.launchEnvironment["MARKDOWN_NOTEPAD_UI_TEST_OPEN_FILE"] = openingFile.path
         }
         app.launch()
         return app
@@ -400,6 +487,42 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(editor.waitForExistence(timeout: 10), "Editor should exist after New")
         editor.click()
         return editor
+    }
+
+    /// The app bundle launched by the test run, as registered with Launch
+    /// Services. The UI-test runner is sandboxed, so the checkout path in an
+    /// environment variable is not reliable; Launch Services knows the bundle.
+    private func appUnderTestURL() -> URL? {
+        NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.ryanpaperclip.markdownnotepad"
+        )
+    }
+
+    /// Sends the same Launch Services re-open event as a Dock click or opening
+    /// the app again while it is running. `XCUIApplication.activate()` alone
+    /// does not deliver `applicationShouldHandleReopen`.
+    private func reopenRunningApp() {
+        guard let appURL = appUnderTestURL() else {
+            XCTFail("Could not find the app bundle under test in Launch Services")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        let opened = expectation(description: "reopen the running app")
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, error in
+            if let error { print("REOPEN ERROR: \(error)") }
+            opened.fulfill()
+        }
+        wait(for: [opened], timeout: 10)
+    }
+
+    private func waitForWindowCount(_ count: Int, in app: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if app.windows.count == count { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return app.windows.count == count
     }
 
     private func waitForUnsavedPrompt(_ app: XCUIApplication) -> XCUIElement {

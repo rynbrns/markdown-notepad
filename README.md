@@ -133,6 +133,30 @@ is one undoable edit, so ⌘Z restores the previous text exactly.
 Inside a list, **Tab** and **Shift-Tab** also increase and decrease nesting by two
 spaces; everywhere else they keep the standard text-view behaviour.
 
+## Launch behaviour
+
+Launching the app from the Dock, Finder, or a launcher presents one empty,
+untitled editor window with the cursor already in the text area, so typing can
+start immediately. Re-opening the app while it is running brings the existing
+windows forward instead of stacking duplicate blank windows; if every window has
+been closed, exactly one new blank window is created. Opening a `.md` file from
+Finder loads that file into the window and does not leave an extra blank window
+behind.
+
+An untitled window is a real unsaved document: closing it (or quitting) prompts
+Save / Don't Save / Cancel, and no document file is written until the user
+saves. Crash-recovery snapshots, when the document becomes dirty, live only in
+`~/Library/Application Support/MarkdownNotepad/Recovery`.
+
+The UI test suite covers all three launch paths (`test00*` in
+`app/MarkdownNotepadUITests`). Create the shared launch-with-file fixture before
+running the UI tests outside CI:
+
+```bash
+mkdir -p /tmp/markdown-notepad-rya16
+printf '# Opened from Finder\n\nBody text\n' > /tmp/markdown-notepad-rya16/opened.md
+```
+
 ## File-format guarantees (M1)
 
 - **Read** decodes UTF-8, records a BOM if present, and normalizes CRLF/CR to LF
