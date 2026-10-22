@@ -107,6 +107,11 @@ jobs:
           ./scripts/verify-document-types.sh \
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
 
+      - name: Prepare RYA-16 launch-with-file fixture
+        run: |
+          mkdir -p /tmp/markdown-notepad-rya16
+          printf '# Opened from Finder\n\nBody text\n' > /tmp/markdown-notepad-rya16/opened.md
+
       - name: Run XCUITest smoke and screenshot suite
         env:
           SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots

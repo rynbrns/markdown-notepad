@@ -172,6 +172,19 @@ final class WorkspaceCoordinator: ObservableObject {
         }
     }
 
+    // MARK: - Reopen
+
+    /// Dock click / re-open while the app is already running. Bring existing
+    /// work forward instead of stacking duplicate blank windows; open exactly
+    /// one blank editor when every window has been closed.
+    func handleReopen() {
+        if let session = liveSessions.first {
+            session.focusWindow()
+            return
+        }
+        openWindowHandler?(Self.editorWindowID)
+    }
+
     // MARK: - Actions
 
     func requestNewWindow() {

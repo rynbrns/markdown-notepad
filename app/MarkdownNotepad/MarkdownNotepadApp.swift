@@ -343,6 +343,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
         WorkspaceCoordinator.shared.writeOpenProbeIfRequested()
+        // UI-test hook: XCUITest cannot reliably deliver a Launch Services
+        // open event to the sandboxed test runner. This drives the same
+        // receiveOpen path a Finder double-click uses.
+        if ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_UI_TESTING"] == "1",
+           let path = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_UI_TEST_OPEN_FILE"],
+           !path.isEmpty {
+            WorkspaceCoordinator.shared.receiveOpen([URL(fileURLWithPath: path)])
+        }
         #endif
     }
 
@@ -357,6 +365,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         WorkspaceCoordinator.shared.receiveOpen([URL(fileURLWithPath: filename)])
         return true
+    }
+
+    /// A Dock click, "open" with no document, or re-activation after the last
+    /// window closed must never leave the app running with no way to type.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        WorkspaceCoordinator.shared.handleReopen()
+        return false
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
