@@ -22,16 +22,19 @@ final class DocumentSession: ObservableObject, Identifiable {
     @Published private(set) var format: TextFileFormat
     @Published private(set) var formatLabel: String
     @Published private(set) var recoveredFromCrash = false
+    /// The filename an untitled document should use on its first save, set by
+    /// the inline title-bar rename before a file exists on disk.
+    @Published private(set) var untitledName: String?
     @Published var conflictPrompt: ConflictPrompt?
     @Published private(set) var wordWrap = true
     @Published private(set) var fontSize: CGFloat = 14
-    @Published private(set) var isPreviewVisible = false
+    /// The active presentation mode. The underlying `state.text` is identical
+    /// in every mode; only the editor's presentation changes.
+    @Published private(set) var editorMode: EditorMode
     let find = FindController()
 
-    /// The preview starts open on wide windows, until the user explicitly
-    /// toggles it with ⇧⌘P.
-    private var previewManuallyToggled = false
-    static let previewDefaultMinimumWidth = CGFloat(PreviewVisibility.defaultMinimumWidth)
+    /// ⇧⌘P temporarily leaves Panels; this remembers what to return to.
+    private var lastNonPanelsMode: EditorMode
 
     /// Called when the document gains/loses a file identity (open, Save As,
     /// Move to Trash) so the workspace can update recents and restoration.
@@ -50,18 +53,22 @@ final class DocumentSession: ObservableObject, Identifiable {
     private var periodicSnapshotTimer: Timer?
     private var isLoading = false
     private weak var window: NSWindow?
+    private var titleBarController: TitleBarController?
     private var closeGuard: WindowCloseGuard?
 
     init(
         workspace: WorkspaceCoordinator? = nil,
         openURL: URL? = nil,
-        recoverSnapshot: Bool = false
+        recoverSnapshot: Bool = false,
+        initialMode: EditorMode = .panels
     ) {
         self.workspace = workspace
         self.state = DocumentDirtyState()
         let initialFormat = TextFileFormat()
         self.format = initialFormat
         self.formatLabel = initialFormat.label
+        self.editorMode = initialMode
+        self.lastNonPanelsMode = initialMode == .panels ? .plainText : initialMode
         find.onHighlightsChanged = { [weak self] in
             self?.textViewController?.highlighter.reapplyForeground()
         }
@@ -78,7 +85,7 @@ final class DocumentSession: ObservableObject, Identifiable {
     var text: String { state.text }
     var fileURL: URL? { state.fileURL }
     var isDirty: Bool { state.isDirty }
-    var displayName: String { state.displayName }
+    var displayName: String { fileURL?.lastPathComponent ?? untitledName ?? "Untitled" }
     var windowTitle: String { isDirty ? "\(displayName) — Edited" : displayName }
 
     /// True when the window has never held a document and carries no edits, so
@@ -135,6 +142,7 @@ final class DocumentSession: ObservableObject, Identifiable {
         formatLabel = format.label
         baseline = loaded.fingerprint
         recoveredFromCrash = false
+        untitledName = nil
         find.textDidChange()
     }
 
@@ -152,7 +160,7 @@ final class DocumentSession: ObservableObject, Identifiable {
         let panel = NSSavePanel()
         panel.allowedContentTypes = Self.textContentTypes
         panel.canCreateDirectories = true
-        panel.nameFieldStringValue = fileURL?.lastPathComponent ?? "Untitled.md"
+        panel.nameFieldStringValue = fileURL?.lastPathComponent ?? untitledName ?? "Untitled.md"
         guard panel.runModal() == .OK, let destination = panel.url else { return }
 
         do {
@@ -161,6 +169,7 @@ final class DocumentSession: ObservableObject, Identifiable {
             let previousIdentity = recoveryIdentity
             baseline = fingerprint
             state.markSaved(at: destination)
+            untitledName = nil
             recoveredFromCrash = false
             stopSnapshots()
             try? recoveryStore.delete(documentID: previousIdentity)
@@ -202,9 +211,7 @@ final class DocumentSession: ObservableObject, Identifiable {
 
     private func performSave(to url: URL, conflictPolicy: ConflictPolicy) {
         do {
-            let textFile = TextFile(text: text, format: format)
-            let fingerprint = try io.save(textFile, to: url, baseline: baseline, conflictPolicy: conflictPolicy)
-            baseline = fingerprint
+            try writeCurrentText(to: url, conflictPolicy: conflictPolicy)
             state.markSaved()
             recoveredFromCrash = false
             stopSnapshots()
@@ -221,6 +228,135 @@ final class DocumentSession: ObservableObject, Identifiable {
             present(error)
         }
     }
+
+    private func writeCurrentText(to url: URL, conflictPolicy: ConflictPolicy) throws {
+        let textFile = TextFile(text: text, format: format)
+        baseline = try io.save(textFile, to: url, baseline: baseline, conflictPolicy: conflictPolicy)
+    }
+
+    // MARK: - Rename / save location
+
+    /// Commits the inline title-bar rename.
+    ///
+    /// For a file-backed document the bytes are moved to the new `.md` name in
+    /// the same folder; for an untitled document the name is recorded and used
+    /// on the next save. Returns `false` (after presenting the reason) when the
+    /// name is invalid or the destination already exists.
+    @discardableResult
+    func renameDocument(to proposedName: String) -> Bool {
+        guard let filename = MarkdownFilename.normalized(proposedName) else {
+            presentInvalidFilename()
+            return false
+        }
+
+        guard let currentURL = fileURL else {
+            untitledName = filename
+            notifyChanged()
+            return true
+        }
+
+        let destination = currentURL.deletingLastPathComponent().appendingPathComponent(filename)
+        if MarkdownFilename.isSameFile(currentURL, destination) {
+            untitledName = nil
+            notifyChanged()
+            return true
+        }
+
+        do {
+            try relocate(to: destination)
+            return true
+        } catch {
+            present(error)
+            return false
+        }
+    }
+
+    /// Saves or moves this document into `folder`, keeping the current name.
+    /// The caller has already confirmed the destination with the user.
+    @discardableResult
+    func moveDocument(toFolder folder: URL) -> Bool {
+        let filename = fileURL?.lastPathComponent ?? untitledName ?? "Untitled.md"
+        let destination = folder.appendingPathComponent(filename)
+        do {
+            if fileURL == nil {
+                try saveNewDocument(at: destination)
+            } else {
+                try relocate(to: destination)
+            }
+            return true
+        } catch {
+            present(error)
+            return false
+        }
+    }
+
+    func beginRenaming() {
+        guard let titleBarController else {
+            NSSound.beep()
+            return
+        }
+        titleBarController.beginEditing()
+    }
+
+    func presentSaveLocationPicker() {
+        guard let titleBarController else {
+            NSSound.beep()
+            return
+        }
+        titleBarController.presentSaveLocationPicker()
+    }
+
+    /// Moves the current document, saving unsaved text first. Never overwrites:
+    /// a name clash is reported and both files are left untouched.
+    private func relocate(to destination: URL) throws {
+        guard let currentURL = fileURL else { return }
+        guard !FileManager.default.fileExists(atPath: destination.path) else {
+            throw MarkdownCoreError.destinationExists
+        }
+        if isDirty {
+            try writeCurrentText(to: currentURL, conflictPolicy: .fail)
+        }
+
+        let previousIdentity = recoveryIdentity
+        try io.move(currentURL, to: destination)
+        baseline = try io.fingerprint(of: destination)
+        state.markSaved(at: destination)
+        untitledName = nil
+        recoveredFromCrash = false
+        stopSnapshots()
+        try? recoveryStore.delete(documentID: previousIdentity)
+        deleteRecoverySnapshot()
+        onFileIdentityChanged?()
+        notifyChanged()
+    }
+
+    /// First save for an untitled document, refusing to replace an existing file.
+    private func saveNewDocument(at destination: URL) throws {
+        guard !FileManager.default.fileExists(atPath: destination.path) else {
+            throw MarkdownCoreError.destinationExists
+        }
+        let previousIdentity = recoveryIdentity
+        let textFile = TextFile(text: text, format: format)
+        baseline = try io.saveNew(textFile, to: destination)
+        state.markSaved(at: destination)
+        untitledName = nil
+        recoveredFromCrash = false
+        stopSnapshots()
+        try? recoveryStore.delete(documentID: previousIdentity)
+        deleteRecoverySnapshot()
+        onFileIdentityChanged?()
+        notifyChanged()
+    }
+
+    private func presentInvalidFilename() {
+        let alert = NSAlert()
+        alert.messageText = "Enter a valid file name."
+        alert.informativeText = "Use a single file name without slashes or colons. Markdown documents keep a .md extension."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
 
     /// A vanished source file must never be silently recreated in place; we
     /// offer Save As instead.
@@ -270,6 +406,7 @@ final class DocumentSession: ObservableObject, Identifiable {
             format = TextFileFormat()
             formatLabel = format.label
             untitledID = UUID()
+            untitledName = nil
             recoveredFromCrash = false
             find.textDidChange()
             onFileIdentityChanged?()
@@ -388,19 +525,29 @@ final class DocumentSession: ObservableObject, Identifiable {
 
     // MARK: - View
 
-    func togglePreview() {
-        previewManuallyToggled = true
-        isPreviewVisible.toggle()
+    var isPreviewVisible: Bool { editorMode == .panels }
+
+    var modeLabel: String { editorMode.title }
+
+    /// Switches presentation without touching the document text. The last
+    /// chosen mode becomes the app-wide default for new windows and relaunches.
+    func setEditorMode(_ mode: EditorMode) {
+        guard mode != editorMode else { return }
+        if mode != .panels {
+            lastNonPanelsMode = mode
+        }
+        editorMode = mode
+        workspace?.recordEditorMode(mode)
         notifyChanged()
     }
 
-    /// Applies the width-based default until the user makes an explicit choice.
-    func updatePreviewVisibility(for windowWidth: CGFloat) {
-        guard !previewManuallyToggled, windowWidth > 0 else { return }
-        let shouldShow = PreviewVisibility.shouldShowByDefault(windowWidth: Double(windowWidth))
-        guard shouldShow != isPreviewVisible else { return }
-        isPreviewVisible = shouldShow
-        notifyChanged()
+    /// ⇧⌘P keeps its M3 meaning: showing/hiding the preview is Panels on/off.
+    func togglePreview() {
+        if editorMode == .panels {
+            setEditorMode(lastNonPanelsMode)
+        } else {
+            setEditorMode(.panels)
+        }
     }
 
     var previewBaseURL: URL? {
@@ -437,6 +584,10 @@ final class DocumentSession: ObservableObject, Identifiable {
         find.textDidChange()
     }
 
+    func applyFormatting(_ action: MarkdownFormattingAction) {
+        textViewController?.apply(action)
+    }
+
     func attach(window: NSWindow) {
         self.window = window
         window.tabbingMode = .preferred
@@ -447,13 +598,17 @@ final class DocumentSession: ObservableObject, Identifiable {
         if let closeGuard, window.delegate !== closeGuard {
             window.delegate = closeGuard
         }
+        if titleBarController == nil {
+            titleBarController = TitleBarController(window: window, session: self)
+        }
         refreshWindowChrome()
-        updatePreviewVisibility(for: window.frame.width)
     }
 
     func refreshWindowChrome() {
+        window?.representedURL = fileURL
         window?.isDocumentEdited = isDirty
         window?.title = windowTitle
+        titleBarController?.update()
     }
 
     /// Brings this document's window to the front (used when the same file is
@@ -461,10 +616,6 @@ final class DocumentSession: ObservableObject, Identifiable {
     func focusWindow() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    func windowDidResize() {
-        updatePreviewVisibility(for: window?.frame.width ?? 0)
     }
 
     // MARK: - Recovery
@@ -544,6 +695,7 @@ final class DocumentSession: ObservableObject, Identifiable {
         format = snapshot.format
         formatLabel = format.label
         baseline = snapshot.baseline
+        untitledName = nil
         recoveredFromCrash = true
         startPeriodicSnapshots()
     }
@@ -588,9 +740,5 @@ final class WindowCloseGuard: NSObject, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         session?.refreshWindowChrome()
-    }
-
-    func windowDidResize(_ notification: Notification) {
-        session?.windowDidResize()
     }
 }

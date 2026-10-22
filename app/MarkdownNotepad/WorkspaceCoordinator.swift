@@ -16,6 +16,7 @@ final class WorkspaceCoordinator: ObservableObject {
 
     private let recentStore: RecentDocumentsStore
     private let restorationStore: SessionRestorationStore
+    private let modeStore: EditorModeStore
     private let isUITesting: Bool
     private var pendingURLs: [URL] = []
     private var sessions: [WeakSession] = []
@@ -30,11 +31,18 @@ final class WorkspaceCoordinator: ObservableObject {
     private init() {
         let testing = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_UI_TESTING"] == "1"
         isUITesting = testing
-        let base = testing
-            ? FileManager.default.temporaryDirectory
+        let supportOverride = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_SUPPORT_DIR"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let base: URL?
+        if let supportOverride {
+            base = supportOverride
+        } else if testing {
+            base = FileManager.default.temporaryDirectory
                 .appendingPathComponent("MarkdownNotepadUITests", isDirectory: true)
                 .appendingPathComponent(ProcessInfo.processInfo.processIdentifier.description, isDirectory: true)
-            : nil
+        } else {
+            base = nil
+        }
         recentStore = RecentDocumentsStore(
             fileURL: base?.appendingPathComponent("RecentDocuments.json")
                 ?? RecentDocumentsStore.defaultFileURL()
@@ -42,6 +50,10 @@ final class WorkspaceCoordinator: ObservableObject {
         restorationStore = SessionRestorationStore(
             fileURL: base?.appendingPathComponent("OpenDocuments.json")
                 ?? SessionRestorationStore.defaultFileURL()
+        )
+        modeStore = EditorModeStore(
+            fileURL: base?.appendingPathComponent("EditorMode.json")
+                ?? EditorModeStore.defaultFileURL()
         )
         recentDocuments = testing ? [] : recentStore.load()
     }
@@ -69,10 +81,21 @@ final class WorkspaceCoordinator: ObservableObject {
         let session = DocumentSession(
             workspace: self,
             openURL: url,
-            recoverSnapshot: recoverSnapshot && url == nil
+            recoverSnapshot: recoverSnapshot && url == nil,
+            initialMode: defaultEditorMode
         )
         register(session)
         return session
+    }
+
+    /// Mode used by new windows and restored after relaunch.
+    var defaultEditorMode: EditorMode {
+        modeStore.load() ?? EditorMode.fallback
+    }
+
+    /// Persists the last user-chosen mode as the app-wide default.
+    func recordEditorMode(_ mode: EditorMode) {
+        try? modeStore.save(mode)
     }
 
     private func register(_ session: DocumentSession) {
@@ -212,12 +235,18 @@ final class WorkspaceCoordinator: ObservableObject {
         alert.informativeText = """
         A plain-text Markdown editor.
 
-        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘W close
+        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘R rename · ⇧⌘M save location · ⌘W close
         Edit: ⌘F find · ⌥⌘F find and replace · ⌘G next match · ⌘L go to line
-        View: preview ⇧⌘P, word wrap, zoom, full screen
+        View: modes ⌃⌘1 plain · ⌃⌘2 panels · ⌃⌘3 WYSIWYG, preview ⇧⌘P,
+              word wrap, zoom, full screen
         Window: tab overview · merge all windows
 
+        Double-click a window title to rename the document, or use the chevron
+        beside the title to choose its folder. Existing files are never
+        overwritten silently.
+
         Files are saved as plain UTF-8 text. Markdown syntax is never rewritten.
+        The last editor mode you use becomes the default for new windows.
         """
         alert.addButton(withTitle: "OK")
         alert.runModal()

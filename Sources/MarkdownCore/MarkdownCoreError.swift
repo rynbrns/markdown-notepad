@@ -13,6 +13,8 @@ public enum MarkdownCoreError: Error, Equatable, Sendable, LocalizedError {
     case fileNotFound
     /// The destination directory does not exist.
     case directoryNotFound
+    /// A file already exists at the destination; it was not overwritten.
+    case destinationExists
     /// The process is not allowed to read or write the path.
     case permissionDenied
     /// The volume ran out of space. The original file is intact.
@@ -34,6 +36,8 @@ public enum MarkdownCoreError: Error, Equatable, Sendable, LocalizedError {
             return "The file could not be found."
         case .directoryNotFound:
             return "The folder could not be found."
+        case .destinationExists:
+            return "A file with that name already exists. Choose a different name or folder. The existing file was not changed."
         case .permissionDenied:
             return "You do not have permission to read or write this file. The original file was not changed."
         case .diskFull:

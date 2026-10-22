@@ -243,6 +243,69 @@ final class MarkdownFileIOTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: destination), Data("new destination\n".utf8))
     }
 
+    // MARK: - Rename / move
+
+    func testMoveRenamesFileWithoutChangingBytes() throws {
+        let source = try write(Fixtures.data("mixed"), named: "before.md")
+        let destination = tempDirectory.appendingPathComponent("after.md")
+
+        let moved = try io.move(source, to: destination)
+
+        XCTAssertEqual(moved.standardizedFileURL.path, destination.standardizedFileURL.path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertEqual(try Data(contentsOf: destination), Fixtures.data("mixed"))
+    }
+
+    func testMoveRefusesExistingDestinationAndLeavesBothFilesIntact() throws {
+        let source = try write(Data("source\n".utf8), named: "source.md")
+        let destination = try write(Data("existing\n".utf8), named: "existing.md")
+
+        XCTAssertThrowsError(try io.move(source, to: destination)) { error in
+            XCTAssertEqual(error as? MarkdownCoreError, .destinationExists)
+        }
+        XCTAssertEqual(try Data(contentsOf: source), Data("source\n".utf8))
+        XCTAssertEqual(try Data(contentsOf: destination), Data("existing\n".utf8))
+    }
+
+    func testMoveToSamePathIsANoOp() throws {
+        let source = try write(Data("same\n".utf8), named: "same.md")
+        XCTAssertNoThrow(try io.move(source, to: source))
+        XCTAssertEqual(try Data(contentsOf: source), Data("same\n".utf8))
+    }
+
+    func testMoveMissingSourceThrows() {
+        let source = tempDirectory.appendingPathComponent("missing.md")
+        let destination = tempDirectory.appendingPathComponent("destination.md")
+        XCTAssertThrowsError(try io.move(source, to: destination)) { error in
+            XCTAssertEqual(error as? MarkdownCoreError, .fileNotFound)
+        }
+    }
+
+    func testMoveToMissingDirectoryThrows() throws {
+        let source = try write(Data("source\n".utf8), named: "source.md")
+        let destination = tempDirectory
+            .appendingPathComponent("missing", isDirectory: true)
+            .appendingPathComponent("destination.md")
+        XCTAssertThrowsError(try io.move(source, to: destination)) { error in
+            XCTAssertEqual(error as? MarkdownCoreError, .directoryNotFound)
+        }
+        XCTAssertEqual(try Data(contentsOf: source), Data("source\n".utf8))
+    }
+
+    func testSaveNewRefusesExistingDestination() throws {
+        let destination = try write(Data("existing\n".utf8), named: "existing.md")
+        XCTAssertThrowsError(try io.saveNew(TextFile(text: "replacement\n"), to: destination)) { error in
+            XCTAssertEqual(error as? MarkdownCoreError, .destinationExists)
+        }
+        XCTAssertEqual(try Data(contentsOf: destination), Data("existing\n".utf8))
+    }
+
+    func testSaveNewWritesBrandNewFile() throws {
+        let destination = tempDirectory.appendingPathComponent("brand-new.md")
+        try io.saveNew(TextFile(text: "new\n"), to: destination)
+        XCTAssertEqual(try Data(contentsOf: destination), Data("new\n".utf8))
+    }
+
     // MARK: - Trash
 
     func testMoveToTrashRemovesOriginalAndLeavesTrashedCopy() throws {
