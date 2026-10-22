@@ -222,13 +222,10 @@ final class MarkdownNotepadUITests: XCTestCase {
         if let path = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"], !path.isEmpty {
             url = URL(fileURLWithPath: path, isDirectory: true)
         } else {
-            // Fall back to `app/.ui-screenshots` in the checkout so CI can
-            // upload the screenshots as build artifacts.
-            let repositoryRoot = URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-            url = repositoryRoot.appendingPathComponent("app/.ui-screenshots", isDirectory: true)
+            // The UI-test process is sandboxed away from the checkout, so the
+            // default lives in the temporary directory; CI copies it into the
+            // workspace before uploading artifacts.
+            url = URL(fileURLWithPath: "/tmp/markdown-notepad-ui-screenshots", isDirectory: true)
         }
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
