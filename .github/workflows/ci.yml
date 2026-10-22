@@ -74,6 +74,8 @@ jobs:
             build
 
       - name: Run XCUITest smoke and screenshot suite
+        env:
+          SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
         run: |
           set -o pipefail
           rm -rf app/TestResults.xcresult
@@ -95,7 +97,7 @@ jobs:
         with:
           name: macos-ui-test-artifacts
           path: |
-            /tmp/markdown-notepad-ui-screenshots
+            app/.ui-screenshots
             app/TestResults.xcresult
             app/xcodebuild-test.log
           if-no-files-found: warn

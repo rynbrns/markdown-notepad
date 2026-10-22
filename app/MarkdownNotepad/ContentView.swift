@@ -125,6 +125,11 @@ struct ContentView: View {
             Text("\(document.lineCount) lines")
             Text("·")
             Text(session.formatLabel)
+            if session.isPreviewVisible {
+                Text("·")
+                Text("Preview")
+                    .accessibilityIdentifier("previewVisible")
+            }
             Spacer()
             if session.isDirty {
                 Text("Edited")

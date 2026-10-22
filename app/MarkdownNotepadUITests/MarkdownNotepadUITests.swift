@@ -98,8 +98,10 @@ final class MarkdownNotepadUITests: XCTestCase {
         editor.typeText("# Dark mode\n\nSemantic colours follow the system appearance.")
         capture(app.windows.firstMatch, name: "09-dark-mode")
         app.typeKey("p", modifierFlags: [.command, .shift])
-        let preview = app.webViews["preview"].firstMatch
-        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should reveal the dark preview")
+        let darkMarker = app.staticTexts["previewVisible"]
+        XCTAssertTrue(darkMarker.waitForExistence(timeout: 10), "⇧⌘P should reveal the dark preview")
+        let darkPreview = app.webViews.firstMatch
+        XCTAssertTrue(darkPreview.waitForExistence(timeout: 10), "The dark preview should host a web view")
         capture(app.windows.firstMatch, name: "11-preview-dark")
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
@@ -128,15 +130,17 @@ final class MarkdownNotepadUITests: XCTestCase {
         """)
 
         app.typeKey("p", modifierFlags: [.command, .shift])
-        let preview = app.webViews["preview"].firstMatch
-        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should open the preview pane")
+        let marker = app.staticTexts["previewVisible"]
+        XCTAssertTrue(marker.waitForExistence(timeout: 10), "⇧⌘P should open the preview pane")
+        let preview = app.webViews.firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), "The preview pane should host a web view")
         capture(app.windows.firstMatch, name: "10-preview-light")
 
         app.typeKey("p", modifierFlags: [.command, .shift])
-        XCTAssertFalse(preview.waitForExistence(timeout: 2), "⇧⌘P should hide the preview pane")
+        XCTAssertTrue(marker.waitForNonExistence(timeout: 5), "⇧⌘P should hide the preview pane")
 
         app.typeKey("p", modifierFlags: [.command, .shift])
-        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should reopen the preview pane")
+        XCTAssertTrue(marker.waitForExistence(timeout: 10), "⇧⌘P should reopen the preview pane")
 
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
