@@ -1,4 +1,5 @@
 import AppKit
+import MarkdownCore
 import SwiftUI
 
 /// A TextKit 2 backed plain-text editor hosted in SwiftUI.
