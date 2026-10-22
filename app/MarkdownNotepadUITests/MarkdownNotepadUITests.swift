@@ -187,6 +187,50 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.terminate()
     }
 
+    // MARK: - Formatting shortcuts
+
+    func test06MarkdownFormattingShortcuts() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("alpha\nbeta")
+
+        app.menuBars.menuBarItems["Editor"].click()
+        XCTAssertTrue(app.menuBars.menuItems["Bold"].waitForExistence(timeout: 3),
+                      "The Editor menu should expose Bold")
+        XCTAssertTrue(app.menuBars.menuItems["Unordered List"].exists,
+                      "The Editor menu should expose list commands")
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("b", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "**alpha\nbeta**", "⌘B should wrap the selection")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta", "⌘Z should restore the exact text")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("8", modifierFlags: [.command, .shift])
+        XCTAssertEqual(editor.value as? String, "- alpha\n- beta", "⇧⌘8 should bullet every line")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("1", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "# alpha\n# beta", "⌘1 should set Heading 1")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("k", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "[alpha\nbeta](url)", "⌘K should insert a link")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
     // MARK: - Helpers
 
     private func launchApp(dark: Bool = false) -> XCUIApplication {

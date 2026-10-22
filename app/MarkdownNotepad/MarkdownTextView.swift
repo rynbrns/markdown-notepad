@@ -24,7 +24,7 @@ struct MarkdownTextView: NSViewRepresentable {
         container.widthTracksTextView = true
         layoutManager.textContainer = container
 
-        let textView = NSTextView(frame: .zero, textContainer: container)
+        let textView = MarkdownEditorTextView(frame: .zero, textContainer: container)
         textView.delegate = context.coordinator
         textView.string = session.text
         textView.isRichText = false
@@ -120,9 +120,15 @@ final class MarkdownTextController: NSObject, NSTextViewDelegate {
     func attach(textView: NSTextView) {
         self.textView = textView
         highlighter.attach(to: textView)
+        if let editor = textView as? MarkdownEditorTextView {
+            editor.tabHandler = { [weak self] outdent in
+                self?.handleTab(outdent: outdent) ?? false
+            }
+        }
     }
 
     func detach() {
+        (textView as? MarkdownEditorTextView)?.tabHandler = nil
         highlighter.detach()
         textView = nil
     }
