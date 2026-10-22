@@ -25,7 +25,13 @@ final class DocumentSession: ObservableObject, Identifiable {
     @Published var conflictPrompt: ConflictPrompt?
     @Published private(set) var wordWrap = true
     @Published private(set) var fontSize: CGFloat = 14
+    @Published private(set) var isPreviewVisible = false
     let find = FindController()
+
+    /// The preview starts open on wide windows, until the user explicitly
+    /// toggles it with ⇧⌘P.
+    private var previewManuallyToggled = false
+    static let previewDefaultMinimumWidth = CGFloat(PreviewVisibility.defaultMinimumWidth)
 
     /// Called when the document gains/loses a file identity (open, Save As,
     /// Move to Trash) so the workspace can update recents and restoration.
@@ -56,6 +62,9 @@ final class DocumentSession: ObservableObject, Identifiable {
         let initialFormat = TextFileFormat()
         self.format = initialFormat
         self.formatLabel = initialFormat.label
+        find.onHighlightsChanged = { [weak self] in
+            self?.textViewController?.highlighter.reapplyForeground()
+        }
 
         if let openURL {
             load(url: openURL)
@@ -278,6 +287,8 @@ final class DocumentSession: ObservableObject, Identifiable {
             deleteRecoverySnapshot()
             stopSnapshots()
             find.detach()
+            textViewController?.detach()
+            textViewController = nil
             onClosed?()
         }
         return canClose
@@ -369,6 +380,25 @@ final class DocumentSession: ObservableObject, Identifiable {
     }
 
     // MARK: - View
+
+    func togglePreview() {
+        previewManuallyToggled = true
+        isPreviewVisible.toggle()
+        notifyChanged()
+    }
+
+    /// Applies the width-based default until the user makes an explicit choice.
+    func updatePreviewVisibility(for windowWidth: CGFloat) {
+        guard !previewManuallyToggled, windowWidth > 0 else { return }
+        let shouldShow = PreviewVisibility.shouldShowByDefault(windowWidth: Double(windowWidth))
+        guard shouldShow != isPreviewVisible else { return }
+        isPreviewVisible = shouldShow
+        notifyChanged()
+    }
+
+    var previewBaseURL: URL? {
+        fileURL
+    }
 
     func toggleWordWrap() {
         wordWrap.toggle()
@@ -539,5 +569,9 @@ final class WindowCloseGuard: NSObject, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         session?.refreshWindowChrome()
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        session?.windowDidResize()
     }
 }

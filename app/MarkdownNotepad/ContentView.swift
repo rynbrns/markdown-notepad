@@ -52,7 +52,20 @@ struct ContentView: View {
                 Divider()
             }
 
-            MarkdownTextView(session: session)
+            if session.isPreviewVisible {
+                HSplitView {
+                    MarkdownTextView(session: session)
+                        .frame(minWidth: 320)
+                    MarkdownPreviewView(
+                        text: session.text,
+                        documentURL: session.previewBaseURL
+                    )
+                    .frame(minWidth: 320)
+                }
+                .accessibilityIdentifier("splitPreview")
+            } else {
+                MarkdownTextView(session: session)
+            }
 
             Divider()
 

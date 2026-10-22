@@ -97,6 +97,47 @@ final class MarkdownNotepadUITests: XCTestCase {
         let editor = newWindowAndFocusEditor(app)
         editor.typeText("# Dark mode\n\nSemantic colours follow the system appearance.")
         capture(app.windows.firstMatch, name: "09-dark-mode")
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        let preview = app.webViews["preview"].firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should reveal the dark preview")
+        capture(app.windows.firstMatch, name: "11-preview-dark")
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    // MARK: - Rendered preview
+
+    func test04PreviewToggleRendersGFM() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("""
+        # Preview title
+
+        A paragraph with **strong** and [a link](https://example.com).
+
+        - [x] finished task
+        - [ ] open task
+
+        | Name | Value |
+        | --- | ---: |
+        | alpha | 1 |
+
+        > A quote.
+        """)
+
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        let preview = app.webViews["preview"].firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should open the preview pane")
+        capture(app.windows.firstMatch, name: "10-preview-light")
+
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        XCTAssertFalse(preview.waitForExistence(timeout: 2), "⇧⌘P should hide the preview pane")
+
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), "⇧⌘P should reopen the preview pane")
+
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
         prompt.buttons["Don’t Save"].click()

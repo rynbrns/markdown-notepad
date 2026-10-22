@@ -173,7 +173,7 @@ final class WorkspaceCoordinator: ObservableObject {
 
         File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘W close
         Edit: ⌘F find · ⌥⌘F find and replace · ⌘G next match · ⌘L go to line
-        View: word wrap, zoom, full screen
+        View: preview ⇧⌘P, word wrap, zoom, full screen
         Window: tab overview · merge all windows
 
         Files are saved as plain UTF-8 text. Markdown syntax is never rewritten.

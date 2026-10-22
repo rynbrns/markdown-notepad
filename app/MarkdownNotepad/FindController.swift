@@ -28,6 +28,10 @@ final class FindController: ObservableObject {
 
     private weak var textView: NSTextView?
 
+    /// Called after find backgrounds change so the syntax highlighter can
+    /// restore its foreground colours on the same ranges.
+    var onHighlightsChanged: (() -> Void)?
+
     var matchCount: Int { matches.count }
 
     func attachIfNeeded(to textView: NSTextView?) {
@@ -178,6 +182,7 @@ final class FindController: ObservableObject {
             layoutManager.invalidateLayout(for: textRange)
         }
         textView.needsDisplay = true
+        onHighlightsChanged?()
     }
 
     func clearHighlights() {
@@ -185,5 +190,6 @@ final class FindController: ObservableObject {
               let layoutManager = textView.textLayoutManager,
               let contentStorage = layoutManager.textContentManager as? NSTextContentStorage else { return }
         layoutManager.setRenderingAttributes([:], for: contentStorage.documentRange)
+        onHighlightsChanged?()
     }
 }

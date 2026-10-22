@@ -48,7 +48,7 @@ struct MarkdownTextView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.setAccessibilityIdentifier("editor")
 
-        context.coordinator.textView = textView
+        context.coordinator.attach(textView: textView)
 
         let scrollView = NSScrollView()
         scrollView.documentView = textView
@@ -79,6 +79,7 @@ struct MarkdownTextView: NSViewRepresentable {
         if textView.string != session.text {
             textView.string = session.text
             textView.setSelectedRange(NSRange(location: 0, length: 0))
+            context.coordinator.highlighter.textDidChange(textView.string)
         }
         let desiredFont = NSFont.monospacedSystemFont(ofSize: session.fontSize, weight: .regular)
         if textView.font != desiredFont {
@@ -109,14 +110,26 @@ struct MarkdownTextView: NSViewRepresentable {
 
 final class MarkdownTextController: NSObject, NSTextViewDelegate {
     weak var textView: NSTextView?
+    let highlighter = MarkdownSyntaxHighlighter()
     private unowned let session: DocumentSession
 
     init(session: DocumentSession) {
         self.session = session
     }
 
+    func attach(textView: NSTextView) {
+        self.textView = textView
+        highlighter.attach(to: textView)
+    }
+
+    func detach() {
+        highlighter.detach()
+        textView = nil
+    }
+
     func textDidChange(_ notification: Notification) {
         guard let textView = notification.object as? NSTextView else { return }
         session.userEdited(textView.string)
+        highlighter.textDidChange(textView.string)
     }
 }

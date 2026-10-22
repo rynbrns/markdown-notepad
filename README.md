@@ -9,9 +9,12 @@ installable ad-hoc-signed Apple Silicon `.dmg`.
 ## Architecture
 
 ```
-MarkdownCore/                 Foundation-only Swift package (no AppKit/SwiftUI)
-  Sources/MarkdownCore/       File format, atomic I/O, fingerprints, recovery
-  Tests/MarkdownCoreTests/    Unit tests, runnable on Linux and macOS
+MarkdownCore/                 Swift package (no AppKit/SwiftUI in the core)
+  Sources/MarkdownCore/       File format, atomic I/O, fingerprints, recovery,
+                              syntax spans, preview visibility policy
+  Sources/MarkdownPreview/    GFM parser + sanitising HTML renderer
+                              (swift-markdown / cmark-gfm)
+  Tests/                      Unit tests, runnable on Linux and macOS
 app/
   project.yml                 XcodeGen spec (source of truth for the Xcode project)
   MarkdownNotepad/            SwiftUI lifecycle, per-window sessions, NSTextView editor

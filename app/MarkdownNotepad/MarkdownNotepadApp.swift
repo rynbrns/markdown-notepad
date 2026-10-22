@@ -140,6 +140,15 @@ struct DocumentCommands: Commands {
         CommandGroup(after: .toolbar) {
             Divider()
 
+            Toggle("Preview", isOn: Binding(
+                get: { session?.isPreviewVisible ?? false },
+                set: { _ in session?.togglePreview() }
+            ))
+            .keyboardShortcut("p", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
+            Divider()
+
             Toggle("Word Wrap", isOn: Binding(
                 get: { session?.wordWrap ?? false },
                 set: { _ in session?.toggleWordWrap() }
