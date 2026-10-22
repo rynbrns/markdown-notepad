@@ -131,14 +131,19 @@ jobs:
         if: always()
         run: grep -q "test08AppIconInDockAndFinder.*passed" app/xcodebuild-test.log
 
-      - name: Export UI-test screenshots from the result bundle
+      - name: Export UI-test screenshots
         if: always()
         run: |
           mkdir -p app/.ui-screenshots
-          xcrun xcresulttool export attachments \
-            --path app/TestResults.xcresult \
-            --output-path app/.ui-screenshots || \
-            echo "xcresulttool attachment export is not available; screenshots remain in the .xcresult"
+          # The UI-test runner is sandboxed, so screenshots land in its own
+          # container temp directory; copy them into the checkout for upload.
+          find "$HOME/Library/Containers" -type f \
+            -path '*MarkdownNotepadScreenshots/*.png' \
+            -exec cp {} app/.ui-screenshots/ \; 2>/dev/null || true
+          if command -v xcparse >/dev/null 2>&1; then
+            xcparse screenshots app/TestResults.xcresult app/.ui-screenshots || true
+          fi
+          ls -1 app/.ui-screenshots | head -30
 
       - name: Generate acceptance rehearsal report
         if: always()

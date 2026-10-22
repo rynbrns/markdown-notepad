@@ -805,20 +805,27 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private var screenshotDirectory: URL {
-        let url: URL
+        var candidates: [URL] = []
         if let path = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"], !path.isEmpty {
-            url = URL(fileURLWithPath: path, isDirectory: true)
-        } else {
-            // The UI-test process is sandboxed away from the checkout. These
-            // files also live inside the .xcresult as XCTAttachments, which is
-            // what CI uploads.
-            url = URL(fileURLWithPath: "/tmp/markdown-notepad-ui-screenshots", isDirectory: true)
+            candidates.append(URL(fileURLWithPath: path, isDirectory: true))
         }
-        do {
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        } catch {
-            print("SCREENSHOT DIRECTORY FAILED \(url.path): \(error)")
+        // The UI-test runner is sandboxed and may not write into the checkout.
+        // Its own temporary directory is always writable; CI copies the PNGs
+        // out of the container afterwards. The same images also live in the
+        // .xcresult as XCTAttachments.
+        candidates.append(
+            FileManager.default.temporaryDirectory
+                .appendingPathComponent("MarkdownNotepadScreenshots", isDirectory: true)
+        )
+
+        for url in candidates {
+            do {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                return url
+            } catch {
+                print("SCREENSHOT DIRECTORY FAILED \(url.path): \(error)")
+            }
         }
-        return url
+        return FileManager.default.temporaryDirectory
     }
 }

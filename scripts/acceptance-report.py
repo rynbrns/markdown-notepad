@@ -27,7 +27,7 @@ STEPS = [
     },
     {
         "step": "3. Save test.md to the Desktop; close and reopen",
-        "tests": ["test09AcceptanceRehearsalSaveReopenFindUndo"],
+        "tests": ["test13AcceptanceRehearsalSaveReopenFindUndo"],
         "automated": "XCUITest writes a real file, saves with ⌘S, closes, and reopens from Open Recent.",
         "manual": "The Desktop path picker and double-clicking the saved file in Finder.",
     },
@@ -39,7 +39,7 @@ STEPS = [
     },
     {
         "step": "5. Edit and ⌘S; reopen in TextEdit — new text is there",
-        "tests": ["test06FileConflictOffersReloadOverwriteAndSaveAs", "test09AcceptanceRehearsalSaveReopenFindUndo"],
+        "tests": ["test10FileConflictOffersReloadOverwriteAndSaveAs", "test13AcceptanceRehearsalSaveReopenFindUndo"],
         "automated": "XCUITest edits, saves, and verifies the file bytes from the test process.",
         "manual": "Opening the result in TextEdit.",
     },
@@ -51,13 +51,13 @@ STEPS = [
     },
     {
         "step": "7. Type, force-quit, relaunch — text comes back",
-        "tests": ["test07ForceQuitThenRelaunchRestoresUnsavedText"],
+        "tests": ["test11ForceQuitThenRelaunchRestoresUnsavedText"],
         "automated": "XCUITest SIGKILLs the app after the idle snapshot and relaunches against the same state directory; the recovery banner and text are checked.",
         "manual": "",
     },
     {
         "step": "8. Reopen via File → Open Recent",
-        "tests": ["test09AcceptanceRehearsalSaveReopenFindUndo"],
+        "tests": ["test13AcceptanceRehearsalSaveReopenFindUndo"],
         "automated": "XCUITest reopens the saved document from Open Recent.",
         "manual": "",
     },
@@ -69,7 +69,7 @@ STEPS = [
     },
     {
         "step": "10. Find/replace and undo/redo; no beachball",
-        "tests": ["test02MenusTabsFindAndPromptScreenshots", "test09AcceptanceRehearsalSaveReopenFindUndo"],
+        "tests": ["test02MenusTabsFindAndPromptScreenshots", "test13AcceptanceRehearsalSaveReopenFindUndo"],
         "automated": "XCUITest exercises find, replace-all, undo, and the find counter; the benchmark records highlighting latency.",
         "manual": "The subjective “no beachball” feel during a long typing session.",
     },
