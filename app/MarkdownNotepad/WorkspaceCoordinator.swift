@@ -68,7 +68,9 @@ final class WorkspaceCoordinator: ObservableObject {
                 // windows follow it.
                 pendingURLs.append(contentsOf: restored.filter { !pendingURLs.contains($0) })
             }
-            if let openPath = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_OPEN_FILE"], !openPath.isEmpty {
+            let environment = ProcessInfo.processInfo.environment
+            if let openPath = environment["MARKDOWN_NOTEPAD_UI_TEST_OPEN_FILE"]
+                ?? environment["MARKDOWN_NOTEPAD_OPEN_FILE"], !openPath.isEmpty {
                 let url = URL(fileURLWithPath: openPath).standardizedFileURL
                 pendingURLs.removeAll { $0.standardizedFileURL == url }
                 pendingURLs.insert(url, at: 0)
@@ -184,6 +186,19 @@ final class WorkspaceCoordinator: ObservableObject {
         for _ in 0..<queue.count {
             openWindowHandler(Self.editorWindowID)
         }
+    }
+
+    // MARK: - Reopen
+
+    /// Dock click / re-open while the app is already running. Bring existing
+    /// work forward instead of stacking duplicate blank windows; open exactly
+    /// one blank editor when every window has been closed.
+    func handleReopen() {
+        if let session = liveSessions.first {
+            session.focusWindow()
+            return
+        }
+        openWindowHandler?(Self.editorWindowID)
     }
 
     // MARK: - Actions

@@ -229,6 +229,30 @@ is one undoable edit, so ⌘Z restores the previous text exactly.
 Inside a list, **Tab** and **Shift-Tab** also increase and decrease nesting by two
 spaces; everywhere else they keep the standard text-view behaviour.
 
+## Launch behaviour
+
+Launching the app from the Dock, Finder, or a launcher presents one empty,
+untitled editor window with the cursor already in the text area, so typing can
+start immediately. Re-opening the app while it is running brings the existing
+windows forward instead of stacking duplicate blank windows; if every window has
+been closed, exactly one new blank window is created. Opening a `.md` file from
+Finder loads that file into the window and does not leave an extra blank window
+behind.
+
+An untitled window is a real unsaved document: closing it (or quitting) prompts
+Save / Don't Save / Cancel, and no document file is written until the user
+saves. Crash-recovery snapshots, when the document becomes dirty, live only in
+`~/Library/Application Support/MarkdownNotepad/Recovery`.
+
+The UI test suite covers all three launch paths (`test00*` in
+`app/MarkdownNotepadUITests`). Create the shared launch-with-file fixture before
+running the UI tests outside CI:
+
+```bash
+mkdir -p /tmp/markdown-notepad-rya16
+printf '# Opened from Finder\n\nBody text\n' > /tmp/markdown-notepad-rya16/opened.md
+```
+
 ## File-format guarantees (M1)
 
 - **Read** decodes UTF-8, records a BOM if present, and normalizes CRLF/CR to LF
@@ -279,7 +303,13 @@ If Swift is not installed, download the Linux toolchain from
 | `macos-app` | `macos-14` | `swift test` passes on Darwin file paths, XcodeGen regenerates the project, `xcodebuild build` succeeds for arm64, and the XCUITest smoke + screenshot suite passes |
 | `release` (`.github/workflows/release.yml`) | `macos-14` | archives a Release arm64 build, ad-hoc signs it, mounts the `.dmg`, copies the app out, verifies the signature, launches the app, and publishes the `.dmg` |
 
-Both CI jobs run on every pull request and on pushes to `main`. The release workflow runs on a `v*` tag or manually, and uploads the `.dmg` as a workflow artifact plus a GitHub Release asset.
+`linux-core` runs on every pull request, every push to `main`, and manual
+dispatch. `macos-app` runs only for pull requests, pushes to `main`, and manual
+dispatch; a feature-branch push starts no run by itself. The XCUITest suite runs
+once per macOS job. See [`docs/ci.md`](docs/ci.md) for the cost accounting and
+the local commands that avoid GitHub macOS minutes. The release workflow runs on
+a `v*` tag or manually, and uploads the `.dmg` as a workflow artifact plus a
+GitHub Release asset.
 
 ## App icon
 
