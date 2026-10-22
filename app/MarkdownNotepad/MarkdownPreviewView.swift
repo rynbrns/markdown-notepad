@@ -83,9 +83,9 @@ struct MarkdownPreviewView: NSViewRepresentable {
         }
 
         private func captureScrollFraction() {
-            guard let webView else { return }
-            let scrollView = webView.scrollView
-            guard let documentView = scrollView.documentView else { return }
+            guard let webView,
+                  let scrollView = scrollView(of: webView),
+                  let documentView = scrollView.documentView else { return }
             let height = documentView.bounds.height
             guard height > 0 else { return }
             pendingScrollFraction = max(0, scrollView.contentOffset.y / height)
@@ -96,8 +96,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
             pendingScrollFraction = nil
             isRestoringScroll = true
             DispatchQueue.main.async {
-                let scrollView = webView.scrollView
-                guard let documentView = scrollView.documentView else {
+                guard let scrollView = self.scrollView(of: webView),
+                      let documentView = scrollView.documentView else {
                     self.isRestoringScroll = false
                     return
                 }
@@ -137,6 +137,20 @@ struct MarkdownPreviewView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             restoreScrollIfNeeded()
+        }
+
+        /// WKWebView on macOS keeps its scroll view in the private view
+        /// hierarchy rather than exposing an iOS-style `scrollView` property.
+        private func scrollView(of webView: WKWebView) -> NSScrollView? {
+            var queue = webView.subviews
+            while !queue.isEmpty {
+                let view = queue.removeFirst()
+                if let scrollView = view as? NSScrollView {
+                    return scrollView
+                }
+                queue.append(contentsOf: view.subviews)
+            }
+            return nil
         }
 
         private func openExternally(_ url: URL?) {

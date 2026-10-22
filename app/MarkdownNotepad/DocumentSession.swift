@@ -441,11 +441,16 @@ final class DocumentSession: ObservableObject, Identifiable {
             window.delegate = closeGuard
         }
         refreshWindowChrome()
+        updatePreviewVisibility(for: window.frame.width)
     }
 
     func refreshWindowChrome() {
         window?.isDocumentEdited = isDirty
         window?.title = windowTitle
+    }
+
+    func windowDidResize() {
+        updatePreviewVisibility(for: window?.frame.width ?? 0)
     }
 
     // MARK: - Recovery
