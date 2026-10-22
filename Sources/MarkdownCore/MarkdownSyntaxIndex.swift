@@ -100,7 +100,7 @@ public struct MarkdownSyntaxIndex: Sendable {
                 state: &lineState,
                 previousContent: previousContent
             )
-            var scanned = MarkdownSyntax.ScannedLine(
+            let scanned = MarkdownSyntax.ScannedLine(
                 start: line.start,
                 fullLength: line.fullLength,
                 content: line.content,
