@@ -130,6 +130,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee app/xcodebuild-test.log
 
+      - name: Export UI-test screenshots from the result bundle
+        if: always()
+        run: |
+          mkdir -p app/.ui-screenshots
+          xcrun xcresulttool export attachments \
+            --path app/TestResults.xcresult \
+            --output-path app/.ui-screenshots || \
+            echo "xcresulttool attachment export is not available; screenshots remain in the .xcresult"
+
       - name: Generate acceptance rehearsal report
         if: always()
         run: |

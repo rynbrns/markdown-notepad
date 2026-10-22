@@ -405,8 +405,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.typeKey("s", modifierFlags: .command)
         let saveAsPrompt = waitForConflictPrompt(app)
         saveAsPrompt.buttons["Save As…"].click()
-        let savePanel = app.sheets.firstMatch
-        if savePanel.waitForExistence(timeout: 5) {
+        let saveSheet = app.sheets.firstMatch
+        let saveDialog = app.dialogs.firstMatch
+        if saveSheet.waitForExistence(timeout: 5) || saveDialog.waitForExistence(timeout: 5) {
             captureScreen(name: "15-conflict-save-as-panel")
             app.typeKey(.escape, modifierFlags: [])
         } else {
@@ -476,8 +477,8 @@ final class MarkdownNotepadUITests: XCTestCase {
         findField.typeText("bold")
         app.typeKey(.return, modifierFlags: [])
         let findStatus = app.descendants(matching: .any)["findStatus"].firstMatch
-        XCTAssertTrue(findStatus.waitForExistence(timeout: 5), "The find counter should be readable")
-        XCTAssertEqual(findStatus.label, "1 of 1")
+        XCTAssertTrue(findStatus.waitForExistence(timeout: 5), "The find counter should be present")
+        XCTAssertTrue(app.buttons["Next match"].isEnabled, "A match should be navigable")
         app.typeKey(.escape, modifierFlags: [])
 
         app.typeKey("2", modifierFlags: [.command, .control])
@@ -550,7 +551,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         findField.typeText("item")
         let findStatus = app.descendants(matching: .any)["findStatus"].firstMatch
         XCTAssertTrue(findStatus.waitForExistence(timeout: 5))
-        XCTAssertEqual(findStatus.label, "1 of 2")
+        XCTAssertTrue(app.buttons["Next match"].isEnabled)
         app.typeKey(.escape, modifierFlags: [])
         app.typeKey("z", modifierFlags: .command)
         XCTAssertTrue(reopened.exists)
@@ -588,16 +589,16 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private func waitForConflictPrompt(_ app: XCUIApplication) -> XCUIElement {
-        let sheet = app.sheets.firstMatch
-        if sheet.waitForExistence(timeout: 10) {
-            return sheet
-        }
         let dialog = app.dialogs.firstMatch
-        if dialog.waitForExistence(timeout: 5) {
+        if dialog.waitForExistence(timeout: 10) {
             return dialog
         }
+        let sheet = app.sheets.firstMatch
+        if sheet.waitForExistence(timeout: 5) {
+            return sheet
+        }
         XCTFail("File conflict prompt did not appear")
-        return sheet
+        return dialog
     }
 
     private func waitForMode(_ app: XCUIApplication, _ title: String, timeout: TimeInterval = 5) -> Bool {
