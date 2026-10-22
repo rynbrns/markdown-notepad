@@ -165,6 +165,13 @@ struct DocumentCommands: Commands {
             }
             .keyboardShortcut("0", modifiers: [.command])
             .disabled(session == nil)
+
+            Divider()
+
+            Button("Enter Full Screen") {
+                NSApp.keyWindow?.toggleFullScreen(nil)
+            }
+            .keyboardShortcut("f", modifiers: [.command, .control])
         }
 
         CommandGroup(after: .windowArrangement) {

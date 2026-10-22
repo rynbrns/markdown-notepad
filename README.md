@@ -1,8 +1,9 @@
 # Markdown Notepad
 
 A native macOS markdown notepad (macOS 14+, Apple Silicon). This repository is at
-**M1**: the file layer is complete and trustworthy, and the app can create,
-open, edit, save, save-as, and Trash markdown files.
+**M2**: the file layer is trustworthy and the app now ships the native shell —
+multi-window and tabs, a full menu bar, unsaved-changes prompts, recents,
+find/replace, dark mode, and session restoration.
 
 ## Architecture
 
@@ -12,8 +13,9 @@ MarkdownCore/                 Foundation-only Swift package (no AppKit/SwiftUI)
   Tests/MarkdownCoreTests/    Unit tests, runnable on Linux and macOS
 app/
   project.yml                 XcodeGen spec (source of truth for the Xcode project)
-  MarkdownNotepad/            SwiftUI lifecycle, NSTextView editor, session
-.github/workflows/ci.yml      Linux core tests + macOS core tests + app build
+  MarkdownNotepad/            SwiftUI lifecycle, per-window sessions, NSTextView editor
+  MarkdownNotepadUITests/     XCUITest smoke + screenshot suite
+.github/workflows/ci.yml      Linux core tests + macOS core tests + build + UI tests
 scripts/check-core-imports.sh Guard that keeps MarkdownCore free of UI imports
 ```
 
@@ -29,7 +31,31 @@ then run `xcodegen generate --spec app/project.yml` from the repository root.
 
 **Editor:** SwiftUI `WindowGroup` hosts an `NSTextView` created with a TextKit 2
 `NSTextContentStorage` / `NSTextLayoutManager`. Text is plain (no rich text, no
-smart substitutions); undo and the find bar are enabled.
+smart substitutions); undo and a custom find/replace bar (case-insensitive
+default, regex toggle, replace-all, match highlighting) are available.
+
+## Native shell (M2)
+
+- **Windows and tabs:** ⌘N opens a window, ⌘O opens in the current window, ⌘W
+  closes the window/tab, and `Window > Merge All Windows` / `Show Tab Overview`
+  use the native window tabbing system.
+- **Menus:** File (New, Open, Open Recent, Close, Save, Save As, Revert to Saved,
+  Move to Trash), Edit (undo/redo/cut/copy/paste plus Find ⌘F, Replace ⌥⌘F, Find
+  Next/Previous, Go to Line ⌘L), View (Word Wrap, Zoom In/Out/Actual Size, Full
+  Screen), Window, and Help.
+- **Dirty state:** one `DocumentSession` per window backed by the Foundation-only
+  `DocumentDirtyState`. The window dirty dot, the "Edited" status, and the
+  Save / Don't Save / Cancel prompts on close, quit, and revert all read from it.
+  Cancel always preserves work and the crash-recovery snapshot.
+- **Recents and restoration:** File > Open Recent keeps the last 10 paths and
+  greys out missing ones. Open file-backed windows are recorded and reopened on
+  the next launch; untitled documents fall back to crash recovery.
+- **Find bar:** literal search is case-insensitive by default, `Aa` opts into
+  case-sensitive, `.*` enables ICU regular expressions (errors are shown), and
+  matches are highlighted in the editor. Replace supports `$1` templates for
+  regex searches.
+- **Appearance:** semantic AppKit colours throughout, so light/dark mode follows
+  the system; UI tests force dark mode and capture a screenshot.
 
 ## File-format guarantees (M1)
 
@@ -78,14 +104,15 @@ If Swift is not installed, download the Linux toolchain from
 | Job | Runner | What it proves |
 | --- | --- | --- |
 | `linux-core` | `ubuntu-latest` in the `swift:6.2` container | `swift test` passes and `MarkdownCore` has no UI imports |
-| `macos-app` | `macos-14` | `swift test` passes on Darwin file paths, XcodeGen regenerates the project, and `xcodebuild build` succeeds for arm64 |
+| `macos-app` | `macos-14` | `swift test` passes on Darwin file paths, XcodeGen regenerates the project, `xcodebuild build` succeeds for arm64, and the XCUITest smoke + screenshot suite passes |
 
 Both jobs run on every pull request and on pushes to `main`.
 
 ## Status / limitations
 
-- No markdown preview, tabs, find/replace UI, packaging, or signing yet (M2–M4).
-- Single window in M1; per-window sessions arrive in M2.
+- Markdown highlighting and the split preview are M3; packaging and signing are M4.
+- macOS document versions/autosave are not part of M2; Revert to Saved and
+  crash-recovery snapshots cover the data-safety paths.
 - The app builds from `app/project.yml`; the generated `.xcodeproj` is ignored
   by git on purpose.
 - Not a WYSIWYG editor. The product is a plain-text markdown notepad.
