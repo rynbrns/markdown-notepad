@@ -150,6 +150,7 @@ final class FindController: ObservableObject {
             textView.setSelectedRange(range)
         }
         textView.scrollRangeToVisible(range)
+        textView.showFindIndicator(for: range)
         applyHighlights()
     }
 
@@ -174,7 +175,9 @@ final class FindController: ObservableObject {
                 ? NSColor.findHighlightColor
                 : NSColor.findHighlightColor.withAlphaComponent(0.35)
             layoutManager.setRenderingAttributes([.backgroundColor: color], for: textRange)
+            layoutManager.invalidateLayout(for: textRange)
         }
+        textView.needsDisplay = true
     }
 
     func clearHighlights() {

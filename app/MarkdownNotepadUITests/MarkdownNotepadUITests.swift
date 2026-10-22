@@ -17,7 +17,7 @@ final class MarkdownNotepadUITests: XCTestCase {
 
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
-        capture(app.windows.firstMatch, name: "01-unsaved-prompt")
+        captureScreen(name: "01-unsaved-prompt")
         XCTAssertTrue(prompt.buttons["Cancel"].exists, "Prompt must offer Cancel")
 
         prompt.buttons["Cancel"].click()
@@ -56,7 +56,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         findField.click()
         findField.typeText("Find")
         capture(app.windows.firstMatch, name: "05-find-bar")
-        let count = app.staticTexts["1 of 2"]
+        let count = app.staticTexts.matching(
+            NSPredicate(format: "label ENDSWITH %@", " of 2")
+        ).firstMatch
         XCTAssertTrue(count.waitForExistence(timeout: 5),
                       "Case-insensitive default should report both matches")
 
@@ -88,7 +90,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         secondEditor.typeText("Unsaved tab")
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
-        capture(app.windows.firstMatch, name: "08-unsaved-prompt")
+        captureScreen(name: "08-unsaved-prompt")
         prompt.buttons["Don’t Save"].click()
         app.terminate()
     }
