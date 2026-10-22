@@ -9,5 +9,4 @@ DerivedData/
 *.zip
 
 app/TestResults.xcresult/
-app/.ui-screenshots/
 app/xcodebuild-test.log

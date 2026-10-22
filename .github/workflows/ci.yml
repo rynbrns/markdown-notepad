@@ -91,19 +91,12 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee app/xcodebuild-test.log
 
-      - name: Collect UI screenshots
-        if: always()
-        run: |
-          mkdir -p app/.ui-screenshots
-          cp -R /tmp/markdown-notepad-ui-screenshots/. app/.ui-screenshots/ 2>/dev/null || true
-
       - name: Upload UI test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: macos-ui-test-artifacts
           path: |
-            app/.ui-screenshots
             app/TestResults.xcresult
             app/xcodebuild-test.log
           if-no-files-found: warn

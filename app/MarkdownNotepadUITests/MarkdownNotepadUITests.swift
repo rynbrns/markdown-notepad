@@ -222,9 +222,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         if let path = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"], !path.isEmpty {
             url = URL(fileURLWithPath: path, isDirectory: true)
         } else {
-            // The UI-test process is sandboxed away from the checkout, so the
-            // default lives in the temporary directory; CI copies it into the
-            // workspace before uploading artifacts.
+            // The UI-test process is sandboxed away from the checkout. These
+            // files also live inside the .xcresult as XCTAttachments, which is
+            // what CI uploads.
             url = URL(fileURLWithPath: "/tmp/markdown-notepad-ui-screenshots", isDirectory: true)
         }
         do {
