@@ -47,8 +47,15 @@ final class FindController: ObservableObject {
         currentIndex = 0
     }
 
-    /// Called by the editor delegate after text changes.
+    /// Called by the editor delegate after text changes. Matching the whole
+    /// document while the find bar is hidden would waste work on every
+    /// keystroke, so only an open find bar recomputes.
     func textDidChange() {
+        guard isVisible else {
+            matches = []
+            currentIndex = 0
+            return
+        }
         refresh(selectionOverride: nil)
     }
 

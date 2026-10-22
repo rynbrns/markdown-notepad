@@ -16,34 +16,42 @@ final class WorkspaceCoordinator: ObservableObject {
 
     private let recentStore: RecentDocumentsStore
     private let restorationStore: SessionRestorationStore
+    private let recoveryStore: RecoveryStore
+    private let supportDirectory: URL
     private let isUITesting: Bool
     private var pendingURLs: [URL] = []
+    private var pendingSnapshots: [RecoverySnapshot] = []
     private var sessions: [WeakSession] = []
     private var didLoadRestoration = false
     private var didSpawnRestorationWindows = false
-    private var isFirstSession = true
 
     /// Installed by the first window so commands can ask SwiftUI to open a new
     /// editor window.
     var openWindowHandler: ((String) -> Void)?
 
     private init() {
-        let testing = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_UI_TESTING"] == "1"
+        let environment = ProcessInfo.processInfo.environment
+        let testing = environment["MARKDOWN_NOTEPAD_UI_TESTING"] == "1"
         isUITesting = testing
-        let base = testing
-            ? FileManager.default.temporaryDirectory
+
+        // One state directory holds recents, restoration, and recovery so a UI
+        // test (or a future sandboxed container) can isolate all three and a
+        // force-quit test can relaunch against the same directory.
+        let base: URL
+        if let override = environment["MARKDOWN_NOTEPAD_SUPPORT_DIR"], !override.isEmpty {
+            base = URL(fileURLWithPath: override, isDirectory: true)
+        } else if testing {
+            base = FileManager.default.temporaryDirectory
                 .appendingPathComponent("MarkdownNotepadUITests", isDirectory: true)
                 .appendingPathComponent(ProcessInfo.processInfo.processIdentifier.description, isDirectory: true)
-            : nil
-        recentStore = RecentDocumentsStore(
-            fileURL: base?.appendingPathComponent("RecentDocuments.json")
-                ?? RecentDocumentsStore.defaultFileURL()
-        )
-        restorationStore = SessionRestorationStore(
-            fileURL: base?.appendingPathComponent("OpenDocuments.json")
-                ?? SessionRestorationStore.defaultFileURL()
-        )
-        recentDocuments = testing ? [] : recentStore.load()
+        } else {
+            base = RecentDocumentsStore.defaultFileURL().deletingLastPathComponent()
+        }
+        supportDirectory = base
+        recentStore = RecentDocumentsStore(fileURL: base.appendingPathComponent("RecentDocuments.json"))
+        restorationStore = SessionRestorationStore(fileURL: base.appendingPathComponent("OpenDocuments.json"))
+        recoveryStore = RecoveryStore(directory: base.appendingPathComponent("Recovery", isDirectory: true))
+        recentDocuments = recentStore.load()
     }
 
     // MARK: - Session lifecycle
@@ -58,20 +66,36 @@ final class WorkspaceCoordinator: ObservableObject {
                 // windows follow it.
                 pendingURLs.append(contentsOf: restored.filter { !pendingURLs.contains($0) })
             }
+            if let openPath = ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_OPEN_FILE"], !openPath.isEmpty {
+                let url = URL(fileURLWithPath: openPath).standardizedFileURL
+                pendingURLs.removeAll { $0.standardizedFileURL == url }
+                pendingURLs.insert(url, at: 0)
+            }
+
+            pendingSnapshots = (try? recoveryStore.loadAll()) ?? []
+            // A snapshot for a file also listed in restoration carries unsaved
+            // text; restoring it must win over reopening the stale file bytes.
+            if !pendingSnapshots.isEmpty {
+                let snapshotPaths = Set(pendingSnapshots.compactMap(\.fileURL))
+                pendingURLs.removeAll { snapshotPaths.contains($0.standardizedFileURL.path) }
+            }
         }
-        let recover = isFirstSession && pendingURLs.isEmpty && !isUITesting
-        isFirstSession = false
-        return makeSession(recoverSnapshot: recover)
+        return makeSession()
     }
 
-    private func makeSession(recoverSnapshot: Bool) -> DocumentSession {
-        let url = pendingURLs.isEmpty ? nil : pendingURLs.removeFirst()
+    private func makeSession() -> DocumentSession {
+        let snapshot = pendingSnapshots.isEmpty ? nil : pendingSnapshots.removeFirst()
+        let url = snapshot == nil && !pendingURLs.isEmpty ? pendingURLs.removeFirst() : nil
         let session = DocumentSession(
             workspace: self,
             openURL: url,
-            recoverSnapshot: recoverSnapshot && url == nil
+            recoveredSnapshot: snapshot,
+            recoveryStore: recoveryStore
         )
         register(session)
+        if let path = snapshot?.fileURL {
+            recordRecent(URL(fileURLWithPath: path))
+        }
         return session
     }
 
@@ -106,7 +130,7 @@ final class WorkspaceCoordinator: ObservableObject {
     func consumeRestorationSpawnCount() -> Int {
         guard !didSpawnRestorationWindows else { return 0 }
         didSpawnRestorationWindows = true
-        return pendingURLs.count
+        return pendingSnapshots.count + pendingURLs.count
     }
 
     func persistOpenDocuments() {

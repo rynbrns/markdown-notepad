@@ -187,18 +187,254 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.terminate()
     }
 
+
+    // MARK: - File conflicts
+
+    func test06FileConflictOffersReloadOverwriteAndSaveAs() throws {
+        let directory = makeTestDirectory("conflict")
+        let file = directory.appendingPathComponent("conflict.md")
+        try "# Original\n".write(to: file, atomically: true, encoding: .utf8)
+
+        let app = launchApp(supportDirectory: directory.appendingPathComponent("support"), openFile: file)
+        let editor = app.textViews["editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10), "An opened file should appear in the editor")
+        XCTAssertTrue((editor.value as? String)?.contains("Original") == true)
+
+        // Change the file from another process, then save from the app.
+        try "# Changed outside the app\n".write(to: file, atomically: true, encoding: .utf8)
+        app.typeKey("s", modifierFlags: .command)
+        let reloadPrompt = waitForConflictPrompt(app)
+        captureScreen(name: "14-conflict-prompt")
+        XCTAssertTrue(reloadPrompt.buttons["Reload"].exists, "Conflict must offer Reload")
+        XCTAssertTrue(reloadPrompt.buttons["Overwrite"].exists, "Conflict must offer Overwrite")
+        XCTAssertTrue(reloadPrompt.buttons["Save As…"].exists, "Conflict must offer Save As")
+        XCTAssertTrue(reloadPrompt.buttons["Cancel"].exists, "Conflict must offer Cancel")
+
+        reloadPrompt.buttons["Reload"].click()
+        let reloaded = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", "Changed outside the app"),
+            object: editor
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [reloaded], timeout: 10), .completed,
+                       "Reload should show the on-disk text")
+
+        editor.click()
+        app.typeKey("a", modifierFlags: .command)
+        editor.typeText("# Mine now\n")
+        try "# Another outside edit\n".write(to: file, atomically: true, encoding: .utf8)
+        app.typeKey("s", modifierFlags: .command)
+        let overwritePrompt = waitForConflictPrompt(app)
+        overwritePrompt.buttons["Overwrite"].click()
+
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", "Mine now"),
+            object: editor
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [saved], timeout: 10), .completed)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "# Mine now\n",
+                       "Overwrite should write the editor text to disk")
+
+        // The Save As path must still be wired after a conflict.
+        try "# Third outside edit\n".write(to: file, atomically: true, encoding: .utf8)
+        app.typeKey("s", modifierFlags: .command)
+        let saveAsPrompt = waitForConflictPrompt(app)
+        saveAsPrompt.buttons["Save As…"].click()
+        let savePanel = app.sheets.firstMatch
+        if savePanel.waitForExistence(timeout: 5) {
+            captureScreen(name: "15-conflict-save-as-panel")
+            app.typeKey(.escape, modifierFlags: [])
+        } else {
+            XCTFail("Save As should present a save panel")
+        }
+        app.terminate()
+    }
+
+    // MARK: - Crash recovery
+
+    func test07ForceQuitThenRelaunchRestoresUnsavedText() throws {
+        let directory = makeTestDirectory("recovery")
+        let support = directory.appendingPathComponent("support")
+        let app = launchApp(supportDirectory: support)
+        let editor = newWindowAndFocusEditor(app)
+        let recoveredText = "Recovered after a force quit #\(UUID().uuidString.prefix(8))"
+        editor.typeText(recoveredText)
+
+        // The idle snapshot fires two seconds after the last edit.
+        sleep(4)
+        XCTAssertEqual(app.state, .runningForeground)
+
+        // A real force quit (SIGKILL), not the cooperative terminate() that
+        // would run the normal save prompts and delete the recovery snapshot.
+        let killer = Process()
+        killer.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        killer.arguments = ["-9", "-x", "MarkdownNotepad"]
+        do {
+            try killer.run()
+            killer.waitUntilExit()
+        } catch {
+            return XCTFail("Could not force quit the app: \(error)")
+        }
+        let stopped = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "state == %d", XCUIApplication.State.notRunning.rawValue),
+            object: app
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [stopped], timeout: 15), .completed,
+                       "Force quit should terminate the app")
+
+        let relaunched = launchApp(supportDirectory: support)
+        let restoredEditor = relaunched.textViews["editor"].firstMatch
+        XCTAssertTrue(restoredEditor.waitForExistence(timeout: 10), "Relaunch should restore a window")
+        let banner = relaunched.staticTexts["recoveryBanner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 10), "Relaunch should show the recovery banner")
+        XCTAssertTrue((restoredEditor.value as? String)?.contains(recoveredText) == true,
+                      "Relaunch should restore the unsaved text")
+        captureScreen(name: "16-recovery-after-force-quit")
+        relaunched.terminate()
+    }
+
+    // MARK: - Accessibility
+
+    func test08AccessibilityLabelsForEditorToolbarAndPreview() throws {
+        let directory = makeTestDirectory("accessibility")
+        let app = launchApp(supportDirectory: directory.appendingPathComponent("support"))
+        let editor = newWindowAndFocusEditor(app)
+        XCTAssertEqual(editor.label, "Markdown editor", "The editor needs a VoiceOver label")
+        editor.typeText("# Accessible heading\n\nSome **bold** text.")
+        XCTAssertTrue(app.staticTexts["Unsaved changes"].waitForExistence(timeout: 5),
+                      "The dirty state needs an accessible label")
+
+        app.typeKey("f", modifierFlags: .command)
+        let findField = app.textFields["findField"]
+        XCTAssertTrue(findField.waitForExistence(timeout: 5))
+        XCTAssertEqual(findField.label, "Find text")
+        XCTAssertTrue(app.buttons["Previous match"].exists)
+        XCTAssertTrue(app.buttons["Next match"].exists)
+        XCTAssertTrue(app.buttons["Match case"].exists)
+        XCTAssertTrue(app.buttons["Use regular expression"].exists)
+        findField.typeText("bold")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(app.staticTexts["1 of 1"].waitForExistence(timeout: 5),
+                      "The find counter should be readable")
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey("p", modifierFlags: [.command, .shift])
+        let preview = app.webViews.firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        XCTAssertEqual(preview.label, "Rendered Markdown preview", "The preview needs a VoiceOver label")
+        capture(app.windows.firstMatch, name: "17-accessibility-preview")
+
+        // Standard keyboard shortcuts remain available.
+        editor.click()
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue(editor.exists)
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    // MARK: - Internal acceptance rehearsal (steps 3, 5, 8, 10)
+
+    func test09AcceptanceRehearsalSaveReopenFindUndo() throws {
+        let directory = makeTestDirectory("rehearsal")
+        let file = directory.appendingPathComponent("test.md")
+        try "".write(to: file, atomically: true, encoding: .utf8)
+
+        let app = launchApp(supportDirectory: directory.appendingPathComponent("support"), openFile: file)
+        let editor = app.textViews["editor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        editor.typeText("# Acceptance\n\n- item one\n- item two\n\nFind me.\n")
+        app.typeKey("s", modifierFlags: .command)
+
+        let saved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value CONTAINS %@", "Acceptance"),
+            object: editor
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [saved], timeout: 10), .completed)
+        let onDisk = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertTrue(onDisk.contains("# Acceptance"))
+        XCTAssertTrue(onDisk.contains("- item two"))
+
+        // Close and reopen through File > Open Recent (step 8).
+        app.typeKey("w", modifierFlags: .command)
+        let maybePrompt = app.dialogs.firstMatch
+        if maybePrompt.waitForExistence(timeout: 2) {
+            // A clean save should not prompt; if it does, keep the file.
+            maybePrompt.buttons["Cancel"].click()
+        }
+        app.menuBars.menuBarItems["File"].click()
+        let recent = app.menuBars.menuItems["Open Recent"].firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: 5))
+        recent.hover()
+        sleep(1)
+        let entry = app.menuBars.menuItems[file.lastPathComponent].firstMatch
+        if entry.waitForExistence(timeout: 5) {
+            entry.click()
+        } else {
+            app.typeKey(.escape, modifierFlags: [])
+        }
+        let reopened = app.textViews["editor"].firstMatch
+        XCTAssertTrue(reopened.waitForExistence(timeout: 10))
+        XCTAssertTrue((reopened.value as? String)?.contains("item two") == true,
+                      "Reopening from the recent list should show the saved text")
+        capture(app.windows.firstMatch, name: "18-rehearsal-reopened")
+
+        // Find/replace and undo (step 10).
+        app.typeKey("f", modifierFlags: .command)
+        let findField = app.textFields["findField"]
+        XCTAssertTrue(findField.waitForExistence(timeout: 5))
+        findField.typeText("item")
+        XCTAssertTrue(app.staticTexts["1 of 2"].waitForExistence(timeout: 5))
+        app.typeKey(.escape, modifierFlags: [])
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertTrue(reopened.exists)
+        app.terminate()
+    }
+
     // MARK: - Helpers
 
-    private func launchApp(dark: Bool = false) -> XCUIApplication {
+    private func makeTestDirectory(_ name: String) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MarkdownNotepadUITests-\(name)-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func waitForConflictPrompt(_ app: XCUIApplication) -> XCUIElement {
+        let sheet = app.sheets.firstMatch
+        if sheet.waitForExistence(timeout: 10) {
+            return sheet
+        }
+        let dialog = app.dialogs.firstMatch
+        if dialog.waitForExistence(timeout: 5) {
+            return dialog
+        }
+        XCTFail("File conflict prompt did not appear")
+        return sheet
+    }
+
+    private func launchApp(
+        dark: Bool = false,
+        supportDirectory: URL? = nil,
+        openFile: URL? = nil
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["MARKDOWN_NOTEPAD_UI_TESTING"] = "1"
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
         if dark {
             app.launchEnvironment["MARKDOWN_NOTEPAD_FORCE_DARK"] = "1"
         }
+        if let supportDirectory {
+            app.launchEnvironment["MARKDOWN_NOTEPAD_SUPPORT_DIR"] = supportDirectory.path
+        }
+        if let openFile {
+            app.launchEnvironment["MARKDOWN_NOTEPAD_OPEN_FILE"] = openFile.path
+        }
         app.launch()
         return app
     }
+
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {
         app.menuBars.menuBarItems["File"].click()

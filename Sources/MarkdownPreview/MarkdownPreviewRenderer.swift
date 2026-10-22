@@ -28,10 +28,84 @@ public enum MarkdownPreviewRenderer {
         "frame-ancestors 'none'"
     ].joined(separator: "; ")
 
+    /// Deeply nested Markdown is rendered up to this depth; beyond it the
+    /// renderer emits a plain-text marker instead of recursing further. This
+    /// keeps adversarial nesting from exhausting the stack.
+    static let maximumNestingDepth = 80
+
+    /// cmark-gfm recurses per block nesting level, so an adversarial file with
+    /// thousands of nested quotes can exhaust the stack before our own depth
+    /// guard runs. Clamp pathological nesting before parsing; the source file
+    /// is never modified, only this preview rendering.
+    static let maximumBlockNesting = 24
+    static let maximumIndentColumns = 120
+
     /// Renders only the article fragment. Useful for focused rendering tests.
     public static func fragment(markdown: String) -> String {
-        let document = Document(parsing: markdown, options: [.disableSmartOpts])
-        return renderChildren(document)
+        let prepared = clampedForParsing(markdown)
+        let document = Document(parsing: prepared.text, options: [.disableSmartOpts])
+        let body = renderChildren(document, depth: 0)
+        guard prepared.wasClamped else { return body }
+        return "<p class=\"depth-limit\">[deeply nested content was simplified for this preview]</p>\n" + body
+    }
+
+    /// Keeps block nesting within what the parser can recurse through safely.
+    static func clampedForParsing(_ markdown: String) -> (text: String, wasClamped: Bool) {
+        guard !markdown.isEmpty else { return (markdown, false) }
+        var wasClamped = false
+        var output: [Substring] = []
+        output.reserveCapacity(markdown.utf8.count / 24)
+
+        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
+            var working = line
+
+            var cursor = working.startIndex
+            var depth = 0
+            var afterMarkers = cursor
+            while cursor < working.endIndex {
+                var probe = cursor
+                var spaces = 0
+                while probe < working.endIndex, working[probe] == " ", spaces < 4 {
+                    probe = working.index(after: probe)
+                    spaces += 1
+                }
+                guard probe < working.endIndex, working[probe] == ">" else { break }
+                depth += 1
+                probe = working.index(after: probe)
+                if probe < working.endIndex, working[probe] == " " {
+                    probe = working.index(after: probe)
+                }
+                cursor = probe
+                afterMarkers = probe
+            }
+            if depth > maximumBlockNesting {
+                let rest = working[afterMarkers...]
+                working = Substring(String(repeating: "> ", count: maximumBlockNesting) + rest)
+                wasClamped = true
+            }
+
+            var indentColumns = 0
+            var indentEnd = working.startIndex
+            while indentEnd < working.endIndex {
+                if working[indentEnd] == " " {
+                    indentColumns += 1
+                } else if working[indentEnd] == "\t" {
+                    indentColumns += 4
+                } else {
+                    break
+                }
+                indentEnd = working.index(after: indentEnd)
+            }
+            if indentColumns > maximumIndentColumns {
+                working = Substring(
+                    String(repeating: " ", count: maximumIndentColumns) + working[indentEnd...]
+                )
+                wasClamped = true
+            }
+            output.append(working)
+        }
+
+        return (output.joined(separator: "\n"), wasClamped)
     }
 
     /// Renders a complete HTML document with the strict CSP and the preview
@@ -59,28 +133,31 @@ public enum MarkdownPreviewRenderer {
 
     // MARK: - Rendering
 
-    private static func renderChildren(_ node: Markup) -> String {
+    private static func renderChildren(_ node: Markup, depth: Int) -> String {
+        guard depth <= maximumNestingDepth else {
+            return "<span class=\"depth-limit\">[deeply nested content omitted]</span>\n"
+        }
         var output = ""
         for child in node.children {
-            output += render(child)
+            output += render(child, depth: depth + 1)
         }
         return output
     }
 
-    private static func render(_ node: Markup) -> String {
+    private static func render(_ node: Markup, depth: Int) -> String {
         switch node {
         case let document as Document:
-            return renderChildren(document)
+            return renderChildren(document, depth: depth)
 
         case let paragraph as Paragraph:
-            return "<p>\(renderChildren(paragraph))</p>\n"
+            return "<p>\(renderChildren(paragraph, depth: depth))</p>\n"
 
         case let heading as Heading:
             let level = min(max(heading.level, 1), 6)
-            return "<h\(level)>\(renderChildren(heading))</h\(level)>\n"
+            return "<h\(level)>\(renderChildren(heading, depth: depth))</h\(level)>\n"
 
         case let quote as BlockQuote:
-            return "<blockquote>\n\(renderChildren(quote))</blockquote>\n"
+            return "<blockquote>\n\(renderChildren(quote, depth: depth))</blockquote>\n"
 
         case is ThematicBreak:
             return "<hr>\n"
@@ -94,11 +171,11 @@ public enum MarkdownPreviewRenderer {
             return "<pre class=\"raw-html\">\(escapeText(html.rawHTML))</pre>\n"
 
         case let list as UnorderedList:
-            return "<ul>\n\(renderChildren(list))</ul>\n"
+            return "<ul>\n\(renderChildren(list, depth: depth))</ul>\n"
 
         case let list as OrderedList:
             let start = list.startIndex == 1 ? "" : " start=\"\(list.startIndex)\""
-            return "<ol\(start)>\n\(renderChildren(list))</ol>\n"
+            return "<ol\(start)>\n\(renderChildren(list, depth: depth))</ol>\n"
 
         case let item as ListItem:
             var checkbox = ""
@@ -115,35 +192,35 @@ public enum MarkdownPreviewRenderer {
                 // paragraph to keep the checkbox inline with its label.
                 let content = item.children.map { child -> String in
                     if let paragraph = child as? Paragraph {
-                        return renderChildren(paragraph)
+                        return renderChildren(paragraph, depth: depth)
                     }
-                    return render(child)
+                    return render(child, depth: depth + 1)
                 }.joined()
                 return "<li class=\"task-item\">\(checkbox)\(content)</li>\n"
             }
-            return "<li>\(renderChildren(item))</li>\n"
+            return "<li>\(renderChildren(item, depth: depth))</li>\n"
 
         case let table as Table:
-            return renderTable(table)
+            return renderTable(table, depth: depth)
 
         case let row as Table.Row:
-            return "<tr>\(renderChildren(row))</tr>\n"
+            return "<tr>\(renderChildren(row, depth: depth))</tr>\n"
 
         case let cell as Table.Cell:
             let tag = cellIsHeader(cell) ? "th" : "td"
-            return "<\(tag)>\(renderChildren(cell))</\(tag)>"
+            return "<\(tag)>\(renderChildren(cell, depth: depth))</\(tag)>"
 
         case let text as Text:
             return escapeText(text.string)
 
         case let emphasis as Emphasis:
-            return "<em>\(renderChildren(emphasis))</em>"
+            return "<em>\(renderChildren(emphasis, depth: depth))</em>"
 
         case let strong as Strong:
-            return "<strong>\(renderChildren(strong))</strong>"
+            return "<strong>\(renderChildren(strong, depth: depth))</strong>"
 
         case let strike as Strikethrough:
-            return "<del>\(renderChildren(strike))</del>"
+            return "<del>\(renderChildren(strike, depth: depth))</del>"
 
         case let code as InlineCode:
             return "<code>\(escapeText(code.code))</code>"
@@ -152,7 +229,7 @@ public enum MarkdownPreviewRenderer {
             return escapeText(html.rawHTML)
 
         case let link as Link:
-            return renderLink(link)
+            return renderLink(link, depth: depth)
 
         case let image as Image:
             return renderImage(image)
@@ -170,17 +247,17 @@ public enum MarkdownPreviewRenderer {
             return ""
 
         default:
-            return renderChildren(node)
+            return renderChildren(node, depth: depth)
         }
     }
 
-    private static func renderTable(_ table: Table) -> String {
+    private static func renderTable(_ table: Table, depth: Int) -> String {
         let alignments = table.columnAlignments
         var output = "<div class=\"table-wrap\"><table>\n"
         output += "<thead>\n<tr>"
         let headerCells = Array(table.head.cells)
         for (index, cell) in headerCells.enumerated() {
-            output += "<th\(alignmentAttribute(alignments, index: index))>\(renderChildren(cell))</th>"
+            output += "<th\(alignmentAttribute(alignments, index: index))>\(renderChildren(cell, depth: depth))</th>"
         }
         output += "</tr>\n</thead>\n"
         if !table.body.isEmpty {
@@ -188,7 +265,7 @@ public enum MarkdownPreviewRenderer {
             for row in table.body.rows {
                 output += "<tr>"
                 for (index, cell) in row.cells.enumerated() {
-                    output += "<td\(alignmentAttribute(alignments, index: index))>\(renderChildren(cell))</td>"
+                    output += "<td\(alignmentAttribute(alignments, index: index))>\(renderChildren(cell, depth: depth))</td>"
                 }
                 output += "</tr>\n"
             }
@@ -220,8 +297,8 @@ public enum MarkdownPreviewRenderer {
         return false
     }
 
-    private static func renderLink(_ link: Link) -> String {
-        let content = renderChildren(link)
+    private static func renderLink(_ link: Link, depth: Int) -> String {
+        let content = renderChildren(link, depth: depth)
         guard let destination = link.destination,
               let url = sanitizedLinkURL(destination) else {
             return content

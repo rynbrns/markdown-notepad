@@ -16,6 +16,7 @@ struct FindBarView: View {
                 .focused($queryFocused)
                 .onSubmit { controller.next() }
                 .accessibilityIdentifier("findField")
+                .accessibilityLabel("Find text")
 
             statusLabel
 
@@ -25,6 +26,7 @@ struct FindBarView: View {
             .buttonStyle(.borderless)
             .disabled(controller.matchCount == 0)
             .help("Previous match (⇧⌘G)")
+            .accessibilityLabel("Previous match")
 
             Button(action: controller.next) {
                 Image(systemName: "chevron.down")
@@ -32,6 +34,7 @@ struct FindBarView: View {
             .buttonStyle(.borderless)
             .disabled(controller.matchCount == 0)
             .help("Next match (⌘G)")
+            .accessibilityLabel("Next match")
 
             Button {
                 controller.isCaseSensitive.toggle()
@@ -44,6 +47,7 @@ struct FindBarView: View {
             .background(controller.isCaseSensitive ? Color.accentColor.opacity(0.2) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .help("Match case")
+            .accessibilityLabel("Match case")
 
             Button {
                 controller.isRegex.toggle()
@@ -56,12 +60,14 @@ struct FindBarView: View {
             .background(controller.isRegex ? Color.accentColor.opacity(0.2) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .help("Use regular expression")
+            .accessibilityLabel("Use regular expression")
 
             if controller.showReplace {
                 TextField("Replace", text: $controller.replaceText)
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 140, idealWidth: 180)
                     .accessibilityIdentifier("replaceField")
+                    .accessibilityLabel("Replace with")
 
                 Button("Replace") { controller.replaceCurrent() }
                     .disabled(controller.matchCount == 0)
@@ -84,6 +90,7 @@ struct FindBarView: View {
             }
             .buttonStyle(.borderless)
             .help("Close find bar")
+            .accessibilityLabel("Close find bar")
             .keyboardShortcut(.escape, modifiers: [])
         }
         .padding(.horizontal, 12)

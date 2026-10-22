@@ -36,10 +36,6 @@ struct ContentView: View {
     @ObservedObject var session: DocumentSession
     @ObservedObject var find: FindController
 
-    private var document: MarkdownDocument {
-        MarkdownDocument(text: session.text)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             if session.recoveredFromCrash {
@@ -106,11 +102,13 @@ struct ContentView: View {
         HStack(spacing: 10) {
             Image(systemName: "arrow.counterclockwise.circle")
             Text("Recovered unsaved text after an unexpected quit.")
+                .accessibilityIdentifier("recoveryBanner")
             Spacer()
             Button("Dismiss") {
                 session.acknowledgeRecovery()
             }
             .buttonStyle(.link)
+            .accessibilityLabel("Dismiss recovery notice")
         }
         .font(.callout)
         .padding(.horizontal, 12)
@@ -120,26 +118,29 @@ struct ContentView: View {
 
     private var statusBar: some View {
         HStack(spacing: 12) {
-            Text("\(document.wordCount) words")
+            Text("\(session.statistics.wordCount) words")
             Text("·")
-            Text("\(document.lineCount) lines")
+            Text("\(session.statistics.lineCount) lines")
             Text("·")
             Text(session.formatLabel)
             if session.isPreviewVisible {
                 Text("·")
                 Text("Preview")
                     .accessibilityIdentifier("previewVisible")
+                    .accessibilityLabel("Preview pane visible")
             }
             Spacer()
             if session.isDirty {
                 Text("Edited")
                     .foregroundStyle(.orange)
                     .accessibilityIdentifier("dirtyIndicator")
+                    .accessibilityLabel("Unsaved changes")
             }
             Text(session.displayName)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .accessibilityIdentifier("documentName")
+                .accessibilityLabel("Document \(session.displayName)")
         }
         .font(.caption)
         .foregroundStyle(.secondary)

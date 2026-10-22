@@ -28,6 +28,8 @@ struct MarkdownPreviewView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsMagnification = true
         webView.setAccessibilityIdentifier("preview")
+        webView.setAccessibilityLabel("Rendered Markdown preview")
+        webView.setAccessibilityHelp("Read-only rendered preview of the Markdown in the editor.")
         webView.underPageBackgroundColor = .textBackgroundColor
         context.coordinator.webView = webView
         context.coordinator.update(text: text, documentURL: documentURL, immediate: true)
@@ -50,10 +52,16 @@ struct MarkdownPreviewView: NSViewRepresentable {
         private var debounce: DispatchWorkItem?
         private var pendingScrollFraction: CGFloat?
         private var isRestoringScroll = false
+        private let renderQueue = DispatchQueue(
+            label: "com.ryanpaperclip.markdownnotepad.preview",
+            qos: .userInitiated
+        )
+        private var generation = 0
 
         func cancel() {
             debounce?.cancel()
             debounce = nil
+            generation += 1
         }
 
         func update(text: String, documentURL: URL?, immediate: Bool = false) {
@@ -61,25 +69,26 @@ struct MarkdownPreviewView: NSViewRepresentable {
             guard text != lastText || baseURL != lastBaseURL else { return }
             lastText = text
             lastBaseURL = baseURL
+            captureScrollFraction()
 
             debounce?.cancel()
+            generation += 1
+            let renderGeneration = generation
+            let name = baseURL?.lastPathComponent ?? "Preview"
             let work = DispatchWorkItem { [weak self] in
-                self?.render(text: text, baseURL: baseURL)
+                guard let self else { return }
+                let html = MarkdownPreviewRenderer.documentHTML(markdown: text, title: name)
+                DispatchQueue.main.async {
+                    guard renderGeneration == self.generation, let webView = self.webView else { return }
+                    webView.loadHTMLString(html, baseURL: baseURL)
+                }
             }
             debounce = work
             if immediate {
-                DispatchQueue.main.async(execute: work)
+                renderQueue.async(execute: work)
             } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+                renderQueue.asyncAfter(deadline: .now() + 0.15, execute: work)
             }
-        }
-
-        private func render(text: String, baseURL: URL?) {
-            guard let webView else { return }
-            captureScrollFraction()
-            let name = baseURL?.lastPathComponent ?? "Preview"
-            let html = MarkdownPreviewRenderer.documentHTML(markdown: text, title: name)
-            webView.loadHTMLString(html, baseURL: baseURL)
         }
 
         private func captureScrollFraction() {

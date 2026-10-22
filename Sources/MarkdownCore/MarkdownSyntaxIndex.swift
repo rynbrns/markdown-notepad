@@ -166,31 +166,37 @@ public struct MarkdownSyntaxIndex: Sendable {
         }
         let affectedStart = rescanIndex > 0 ? lines[rescanIndex - 1].start : 0
 
-        var newLines = Array(lines[0..<rescanIndex])
+        // Keep only the suffix we might reuse, then edit the prefix in place.
+        // Copying the whole line array on every keystroke was the dominant
+        // cost for tail edits in multi-megabyte documents.
+        let tail = Array(lines[rescanIndex...])
+        lines.removeSubrange(rescanIndex..<lines.count)
         if rescanIndex > 0 {
-            newLines[newLines.count - 1].spans.removeAll { span in
+            lines[lines.count - 1].spans.removeAll { span in
                 if case .tableHeader = span.kind { return true }
                 return false
             }
         }
+
         var state = rescanIndex > 0 ? lines[rescanIndex - 1].stateAfter : .initial
         var previousContent = rescanIndex > 0 ? lines[rescanIndex - 1].content : nil
         var location = baseStart
-        var oldIndex = rescanIndex
+        var tailIndex = 0
         var affectedEnd = source.length
 
         while location < source.length {
             let (line, after) = MarkdownSyntax.readLine(source, at: location)
-            let startDelta = oldIndex < lines.count ? location - lines[oldIndex].start : 0
-            let canReuse = oldIndex > rescanIndex
+            let previousLine = tailIndex < tail.count ? tail[tailIndex] : nil
+            let startDelta = previousLine.map { location - $0.start } ?? 0
+            let canReuse = tailIndex > 0
                 && startDelta == 0
-                && oldIndex < lines.count
-                && line.content == lines[oldIndex].content
-                && state == lines[oldIndex].stateAfter
-                && !reuseWouldNeedRetroactiveHeader(line: line, previous: newLines.last)
+                && previousLine.map {
+                    line.content == $0.content && state == $0.stateAfter
+                } == true
+                && !reuseWouldNeedRetroactiveHeader(line: line, previous: lines.last)
 
             if canReuse {
-                newLines.append(contentsOf: lines[oldIndex...])
+                lines.append(contentsOf: tail[tailIndex...])
                 affectedEnd = location
                 break
             }
@@ -203,16 +209,16 @@ public struct MarkdownSyntaxIndex: Sendable {
                 state: &lineState,
                 previousContent: previousContent
             )
-            if result.headerForPrevious, let previous = newLines.last {
-                newLines[newLines.count - 1].spans.removeAll { span in
+            if result.headerForPrevious, let previous = lines.last {
+                lines[lines.count - 1].spans.removeAll { span in
                     if case .tableHeader = span.kind { return true }
                     return false
                 }
-                newLines[newLines.count - 1].spans.append(
+                lines[lines.count - 1].spans.append(
                     MarkdownSyntaxSpan(range: previous.fullRange, kind: .tableHeader)
                 )
             }
-            newLines.append(MarkdownSyntax.ScannedLine(
+            lines.append(MarkdownSyntax.ScannedLine(
                 start: line.start,
                 fullLength: line.fullLength,
                 content: line.content,
@@ -222,16 +228,15 @@ public struct MarkdownSyntaxIndex: Sendable {
             state = lineState
             previousContent = line.content
             location = after
-            oldIndex += 1
+            tailIndex += 1
         }
 
         text = newText
         contentLength = source.length
-        lines = newLines
         cacheIsValid = true
 
         let startIndex = max(0, rescanIndex - 1)
-        let spans = newLines[startIndex...].flatMap { line in
+        let spans = lines[startIndex...].flatMap { line in
             line.spans.filter { NSMaxRange($0.range) <= affectedEnd }
         }
         return MarkdownSyntaxUpdate(

@@ -26,6 +26,7 @@ final class DocumentSession: ObservableObject, Identifiable {
     @Published private(set) var wordWrap = true
     @Published private(set) var fontSize: CGFloat = 14
     @Published private(set) var isPreviewVisible = false
+    @Published private(set) var statistics = DocumentStatistics(lineCount: 0, wordCount: 0, utf8ByteCount: 0)
     let find = FindController()
 
     /// The preview starts open on wide windows, until the user explicitly
@@ -43,9 +44,13 @@ final class DocumentSession: ObservableObject, Identifiable {
 
     private let workspace: WorkspaceCoordinator?
     private let io = MarkdownFileIO()
-    private let recoveryStore = RecoveryStore(directory: RecoveryStore.defaultDirectory())
+    private let recoveryStore: RecoveryStore
     private var baseline: FileFingerprint?
     private var untitledID = UUID()
+    private var restoredDocumentID: String?
+    private let statsQueue = DispatchQueue(label: "com.ryanpaperclip.markdownnotepad.stats", qos: .utility)
+    private var statsWork: DispatchWorkItem?
+    private var statsGeneration = 0
     private var idleSnapshotTimer: Timer?
     private var periodicSnapshotTimer: Timer?
     private var isLoading = false
@@ -55,9 +60,11 @@ final class DocumentSession: ObservableObject, Identifiable {
     init(
         workspace: WorkspaceCoordinator? = nil,
         openURL: URL? = nil,
-        recoverSnapshot: Bool = false
+        recoveredSnapshot: RecoverySnapshot? = nil,
+        recoveryStore: RecoveryStore = RecoveryStore(directory: RecoveryStore.defaultDirectory())
     ) {
         self.workspace = workspace
+        self.recoveryStore = recoveryStore
         self.state = DocumentDirtyState()
         let initialFormat = TextFileFormat()
         self.format = initialFormat
@@ -68,9 +75,10 @@ final class DocumentSession: ObservableObject, Identifiable {
 
         if let openURL {
             load(url: openURL)
-        } else if recoverSnapshot {
-            restoreRecoverySnapshotIfNeeded()
+        } else if let recoveredSnapshot {
+            restore(recoveredSnapshot)
         }
+        refreshStatistics(immediately: true)
     }
 
     // MARK: - Presentation
@@ -94,6 +102,7 @@ final class DocumentSession: ObservableObject, Identifiable {
         guard !isLoading else { return }
         guard state.edit(newText) else { return }
         find.textDidChange()
+        refreshStatistics()
         scheduleIdleSnapshot()
         startPeriodicSnapshots()
         notifyChanged()
@@ -135,7 +144,9 @@ final class DocumentSession: ObservableObject, Identifiable {
         formatLabel = format.label
         baseline = loaded.fingerprint
         recoveredFromCrash = false
+        restoredDocumentID = nil
         find.textDidChange()
+        refreshStatistics(immediately: true)
     }
 
     // MARK: - Save
@@ -162,6 +173,7 @@ final class DocumentSession: ObservableObject, Identifiable {
             baseline = fingerprint
             state.markSaved(at: destination)
             recoveredFromCrash = false
+            restoredDocumentID = nil
             stopSnapshots()
             try? recoveryStore.delete(documentID: previousIdentity)
             deleteRecoverySnapshot()
@@ -207,6 +219,7 @@ final class DocumentSession: ObservableObject, Identifiable {
             baseline = fingerprint
             state.markSaved()
             recoveredFromCrash = false
+            restoredDocumentID = nil
             stopSnapshots()
             deleteRecoverySnapshot()
             onFileIdentityChanged?()
@@ -217,8 +230,26 @@ final class DocumentSession: ObservableObject, Identifiable {
             } else {
                 conflictPrompt = .externalChange
             }
+        } catch MarkdownCoreError.permissionDenied {
+            presentReadOnlySaveAs(url: url)
         } catch {
             present(error)
+        }
+    }
+
+    /// A read-only volume or folder is a save failure, not a crash: keep the
+    /// text and guide the user to a writable destination.
+    private func presentReadOnlySaveAs(url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "“\(url.lastPathComponent)” can’t be saved here."
+        alert.informativeText = """
+        The folder or disk is read-only, or you don’t have permission to change it.         Your text is still here — save it somewhere writable to keep it.
+        """
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save As…")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            saveAs()
         }
     }
 
@@ -271,7 +302,9 @@ final class DocumentSession: ObservableObject, Identifiable {
             formatLabel = format.label
             untitledID = UUID()
             recoveredFromCrash = false
+            restoredDocumentID = nil
             find.textDidChange()
+            refreshStatistics(immediately: true)
             onFileIdentityChanged?()
             notifyChanged()
         } catch {
@@ -473,7 +506,7 @@ final class DocumentSession: ObservableObject, Identifiable {
         if let fileURL {
             return RecoveryStore.documentID(for: fileURL)
         }
-        return RecoveryStore.documentID(forUntitled: untitledID)
+        return restoredDocumentID ?? RecoveryStore.documentID(forUntitled: untitledID)
     }
 
     private func snapshotIfDirty() {
@@ -535,8 +568,10 @@ final class DocumentSession: ObservableObject, Identifiable {
         notifyChanged()
     }
 
-    private func restoreRecoverySnapshotIfNeeded() {
-        guard let snapshot = (try? recoveryStore.loadAll())?.first else { return }
+    /// Restores one specific snapshot. The workspace owns snapshot discovery so
+    /// every unsaved document gets its own window instead of all sessions
+    /// racing for the first file in the recovery folder.
+    func restore(_ snapshot: RecoverySnapshot) {
         isLoading = true
         state.load(text: snapshot.text, fileURL: snapshot.fileURL.map { URL(fileURLWithPath: $0) })
         state.markRecovered()
@@ -545,7 +580,30 @@ final class DocumentSession: ObservableObject, Identifiable {
         formatLabel = format.label
         baseline = snapshot.baseline
         recoveredFromCrash = true
+        restoredDocumentID = snapshot.documentID
         startPeriodicSnapshots()
+        refreshStatistics(immediately: true)
+    }
+
+    // MARK: - Statistics
+
+    /// Recomputes word/line counts off the main thread. A 10 MB document takes
+    /// long enough that doing this inside `body` on every keystroke would make
+    /// typing feel heavy, so results are debounced and generation-checked.
+    private func refreshStatistics(immediately: Bool = false) {
+        statsGeneration += 1
+        let generation = statsGeneration
+        let snapshot = text
+        statsWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            let statistics = MarkdownDocument(text: snapshot).statistics
+            DispatchQueue.main.async {
+                guard let self, generation == self.statsGeneration else { return }
+                self.statistics = statistics
+            }
+        }
+        statsWork = work
+        statsQueue.asyncAfter(deadline: .now() + (immediately ? 0 : 0.2), execute: work)
     }
 
     // MARK: - Helpers
