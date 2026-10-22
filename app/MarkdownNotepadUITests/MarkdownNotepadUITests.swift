@@ -210,7 +210,11 @@ final class MarkdownNotepadUITests: XCTestCase {
 
         let directory = screenshotDirectory
         let url = directory.appendingPathComponent("\(name).png")
-        try? screenshot.pngRepresentation.write(to: url)
+        do {
+            try screenshot.pngRepresentation.write(to: url)
+        } catch {
+            print("SCREENSHOT WRITE FAILED \(url.path): \(error)")
+        }
     }
 
     private var screenshotDirectory: URL {
@@ -226,7 +230,11 @@ final class MarkdownNotepadUITests: XCTestCase {
                 .deletingLastPathComponent()
             url = repositoryRoot.appendingPathComponent("app/.ui-screenshots", isDirectory: true)
         }
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        } catch {
+            print("SCREENSHOT DIRECTORY FAILED \(url.path): \(error)")
+        }
         return url
     }
 }
