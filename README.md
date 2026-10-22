@@ -431,3 +431,6 @@ These are deliberate v1 boundaries, not defects:
 - Double-clicking this app's title bar starts a rename instead of the system
   "double-click title bar to zoom/minimize" action, matching the product
   request. The title bar remains draggable for moving the window.
+- WYSIWYG is source-preserving: it hides inline markers, while list bullets and
+  task boxes remain as source markers and tables and code blocks are styled but
+  not converted. The document is never converted to a separate rich-text model.

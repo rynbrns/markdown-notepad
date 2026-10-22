@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+    # `labeled` lets a PR opt into macOS by adding the `macos-ci` label.
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
 
 permissions:
@@ -40,12 +42,13 @@ jobs:
 
   macos-app:
     name: macOS / MarkdownNotepad
-    # macOS runners bill at 10x. Run them only for PRs, main, and manual
-    # dispatches; feature-branch pushes are covered by the PR event.
+    # macOS runners bill at 10x and included minutes are exhausted. Keep them
+    # off ordinary pushes and PRs: run only on manual dispatch or when a PR is
+    # explicitly labeled `macos-ci`.
     if: >-
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'macos-ci'))
     runs-on: macos-14
     timeout-minutes: 20
     steps:
