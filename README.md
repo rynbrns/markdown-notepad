@@ -1,10 +1,106 @@
 # Markdown Notepad
 
-A native macOS markdown notepad (macOS 14+, Apple Silicon). This repository is at
-**M2 + M4**: the file layer is trustworthy, the app ships the native shell —
-multi-window and tabs, a full menu bar, unsaved-changes prompts, recents,
-find/replace, dark mode, and session restoration — and CI produces an
-installable ad-hoc-signed Apple Silicon `.dmg`.
+A native macOS markdown notepad (macOS 14+, Apple Silicon). **v0.2.0** is the
+hardened M5 build: trustworthy file handling, native windows and menus, Markdown
+highlighting with a live split preview, incremental highlighting that stays
+responsive in multi-megabyte files, conflict and crash-recovery flows, accessible
+controls, and an installable ad-hoc-signed Apple Silicon `.dmg` produced by CI.
+
+## Using Markdown Notepad
+
+The board acceptance checklist is in
+[docs/ACCEPTANCE-REHEARSAL.md](docs/ACCEPTANCE-REHEARSAL.md); release notes are in
+[docs/RELEASE-NOTES.md](docs/RELEASE-NOTES.md).
+
+### Open and save
+
+- **New:** ⌘N opens a new window with an untitled document.
+- **Open:** ⌘O opens a `.md` or plain-text file in the current window.
+- **Open from Finder:** double-click a Markdown file, use **Open With**, or run
+  `open -a "Markdown Notepad" notes.md`. An existing window for that file comes
+  forward instead of opening a duplicate.
+- **Open Recent:** File → Open Recent lists the last 10 files (missing files are
+  greyed out).
+- **Save:** ⌘S. Save As is ⇧⌘S. The status bar shows the file name and whether
+  there are unsaved changes.
+- **Revert:** File → Revert to Saved discards edits after a confirmation prompt.
+- **Trash:** File → Move to Trash moves the file to the macOS Trash.
+
+Files are written as UTF-8. A byte-order mark and the file's original line
+endings (LF, CRLF, or mixed) are preserved. Saves are atomic, so a failed save
+cannot damage the original file.
+
+### Markdown highlighting and preview
+
+- Syntax colours appear as you type: headings, emphasis, strong, strikethrough,
+  list and task markers, links, images, code, tables, and quotes.
+- **⇧⌘P** toggles the rendered GFM preview. On wide windows the preview opens by
+  default; once you toggle it yourself the app remembers your choice for that
+  window.
+- The preview is read-only. It renders local relative images, blocks remote
+  resources, and cannot run JavaScript. Links open in your default browser.
+- Markdown source is never rewritten. The preview and highlighting only add
+  visual attributes.
+
+### Finding text and moving around
+
+- ⌘F find, ⌥⌘F find and replace, ⌘G next match, ⇧⌘G previous match.
+- Find is case-insensitive by default; **Aa** matches case, **.\*** enables
+  regular expressions. Replace supports `$1` templates for regex searches.
+- ⌘L jumps to a line number.
+- ⌘Z / ⇧⌘Z undo and redo; standard cut/copy/paste apply.
+
+### Windows, appearance, and zoom
+
+- ⌘N new window, ⌘W close, Window → Merge All Windows, Window → Show Tab Overview.
+- View → Word Wrap, Zoom In (⌘+), Zoom Out (⌘−), Actual Size (⌘0), Enter Full
+  Screen (⌃⌘F).
+- The app follows the system light/dark appearance and uses contrast-checked
+  syntax colours in both.
+
+### Recovering unsaved work
+
+- While a document has unsaved changes, the app snapshots it into
+  `~/Library/Application Support/MarkdownNotepad/Recovery`. The first snapshot is
+  taken about two seconds after you stop typing; afterwards it refreshes every
+  30 seconds.
+- If the app is force-quit or crashes, the next launch reopens the recovered text
+  with a banner that says **Recovered unsaved text after an unexpected quit.**
+- The snapshot is deleted after a clean save or a clean quit. It never lives next
+  to your document.
+
+### When a file changed outside the app
+
+If another program changes a file after you opened it, ⌘S refuses to overwrite it
+silently. You get four choices:
+
+- **Reload** replaces the editor with the version on disk.
+- **Overwrite** writes your editor text over the on-disk version.
+- **Save As…** writes your text to a new file and leaves the other program's
+  version untouched.
+- **Cancel** changes nothing.
+
+A file that disappeared while you were editing is never recreated at the old
+path; the app offers Save As instead. A read-only folder or volume produces the
+same kind of offer instead of an error that loses your text.
+
+### Accessibility and keyboard use
+
+- The editor has the VoiceOver label **Markdown editor**, the preview **Rendered
+  Markdown preview**, and the find controls have explicit labels.
+- The dirty indicator and document name are exposed to VoiceOver, and the status
+  bar reports word and line counts.
+- Every command has a menu item and the standard keyboard shortcut, so the app
+  can be driven without a mouse.
+- Syntax colours meet WCAG AA (4.5:1) contrast against both the standard light
+  and dark editor backgrounds; this is enforced by a unit test.
+
+### Markdown that is unusual or hostile
+
+Malformed Markdown, unclosed code fences, huge tables, missing local images,
+thousands of nested list levels, and bracket/backtick floods are all handled
+without crashing or hanging. Nesting deeper than 24 block levels is simplified
+in the preview only (the file is untouched) and labelled as such.
 
 ## Architecture
 
@@ -188,17 +284,48 @@ CI runs the same script on every macOS build and uploads the report as
 Requires macOS 14+, Xcode 15.4+, and `brew install xcodegen`.
 
 ```bash
-VERSION=0.1.0 ./scripts/build-release.sh
-VERSION=0.1.0 ./scripts/verify-release.sh
+VERSION=0.2.0 ./scripts/build-release.sh
+VERSION=0.2.0 ./scripts/verify-release.sh
 ```
 
-`build-release.sh` writes `build/Markdown-Notepad-0.1.0-arm64.dmg` and its SHA-256. `verify-release.sh` mounts the image, copies the app out, checks the signature, and launches it. Set `SKIP_LAUNCH=1` on a machine without a GUI session.
+`build-release.sh` writes `build/Markdown-Notepad-0.2.0-arm64.dmg` and its SHA-256. `verify-release.sh` mounts the image, copies the app out, checks the signature, and launches it. Set `SKIP_LAUNCH=1` on a machine without a GUI session.
 
-## Status / limitations
+## Performance
 
-- Markdown highlighting and the split preview are M3; packaging and signing are M4.
-- macOS document versions/autosave are not part of M2; Revert to Saved and
-  crash-recovery snapshots cover the data-safety paths.
+Measured with `./scripts/bench-highlight.sh` (release build, 2 GHz Intel XPS
+development machine; Apple Silicon is faster). Full numbers and method are in
+[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
+| Workload | Full document scan | Edit at the end |
+| --- | ---: | ---: |
+| 1 MB Markdown | ~0.37 s | ~0.05 ms |
+| 10 MB Markdown | ~4.0 s | ~0.8 ms |
+
+The full scan runs off the main thread when a document opens; typing only
+rescans from the edited line and reuses the untouched suffix, so editing does not
+wait for a whole-file pass. Word/line counts are also computed off the main
+thread and debounced.
+
+## Known limitations (v2 candidates)
+
+These are deliberate v1 boundaries, not defects:
+
+- **No WYSIWYG typing.** v1 is a plain-text Markdown notepad with a live rendered
+  preview. Hiding markers while typing is a v2 decision.
+- No cloud sync, collaboration, iOS/iPadOS app, or App Store distribution.
+- No print/PDF export, themes, plugins, or telemetry.
+- No image paste or drag-in; images already on disk render in the preview.
+- No multi-file search or workspace-wide replace.
+- External changes are detected when you save (or use File → Revert to Saved),
+  not by continuously watching every open file.
+- The first full-document highlight of a 10 MB file takes a few seconds on very
+  old hardware; it runs in the background and never blocks typing.
+- A crash loses at most the last couple of seconds of typing, because the idle
+  snapshot fires about two seconds after edits stop.
+- macOS document versions/autosave are not used; Revert to Saved and recovery
+  snapshots cover the data-safety paths.
 - The app builds from `app/project.yml`; the generated `.xcodeproj` is ignored
   by git on purpose.
-- Not a WYSIWYG editor. The product is a plain-text markdown notepad.
+- Distribution is ad-hoc signed by default. The first launch needs
+  right-click → Open unless an Apple Developer notarization credential is
+  supplied.

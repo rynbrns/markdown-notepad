@@ -3,7 +3,7 @@ import XCTest
 @testable import MarkdownPreview
 
 final class PreviewRobustnessTests: XCTestCase {
-    private func measure(_ body: () -> Void) -> Double {
+    private func timed(_ body: () -> Void) -> Double {
         let start = DispatchTime.now().uptimeNanoseconds
         body()
         return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
@@ -12,7 +12,7 @@ final class PreviewRobustnessTests: XCTestCase {
     func testDeeplyNestedMarkdownStopsAtTheDepthLimitInsteadOfOverflowing() {
         let deep = String(repeating: "> ", count: 5_000) + "deep text"
         var html = ""
-        let elapsed = measure { html = MarkdownPreviewRenderer.fragment(markdown: deep) }
+        let elapsed = timed { html = MarkdownPreviewRenderer.fragment(markdown: deep) }
         print(String(format: "deep nesting render: %d bytes in %.1f ms", deep.utf8.count, elapsed))
         XCTAssertTrue(html.contains("deeply nested content was simplified"))
         XCTAssertTrue(html.contains("deep text"))
@@ -25,7 +25,7 @@ final class PreviewRobustnessTests: XCTestCase {
             table += "| row \(row) | value \(row) |\n"
         }
         var html = ""
-        let elapsed = measure {
+        let elapsed = timed {
             html = MarkdownPreviewRenderer.documentHTML(markdown: table)
         }
         print(String(format: "huge table render: %d rows in %.1f ms", 5_000, elapsed))
@@ -48,7 +48,7 @@ final class PreviewRobustnessTests: XCTestCase {
             "<script>alert('x')</script>\n\n# heading"
         ]
         for source in cases {
-            let elapsed = measure {
+            let elapsed = timed {
                 let html = MarkdownPreviewRenderer.documentHTML(markdown: source)
                 XCTAssertFalse(html.isEmpty)
                 XCTAssertTrue(html.contains("Content-Security-Policy"))

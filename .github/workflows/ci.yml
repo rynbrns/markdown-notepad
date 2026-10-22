@@ -106,7 +106,7 @@ jobs:
           ./scripts/verify-document-types.sh \
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
 
-      - name: Run XCUITest smoke and screenshot suite
+      - name: Run internal acceptance rehearsal (XCUITest)
         env:
           SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
           ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
@@ -125,6 +125,13 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee app/xcodebuild-test.log
 
+      - name: Generate acceptance rehearsal report
+        if: always()
+        run: |
+          python3 scripts/acceptance-report.py \
+            app/xcodebuild-test.log \
+            app/acceptance-rehearsal.md
+
       - name: Upload UI test artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -134,6 +141,8 @@ jobs:
             app/TestResults.xcresult
             app/xcodebuild-test.log
             app/document-type-verification.md
+            app/acceptance-rehearsal.md
+            app/.ui-screenshots
             /tmp/markdown-notepad-ui-screenshots
             /tmp/icon-evidence.log
             /tmp/icon-evidence.xcresult
