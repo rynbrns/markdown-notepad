@@ -88,7 +88,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                   let documentView = scrollView.documentView else { return }
             let height = documentView.bounds.height
             guard height > 0 else { return }
-            pendingScrollFraction = max(0, scrollView.contentOffset.y / height)
+            pendingScrollFraction = max(0, scrollView.contentView.bounds.origin.y / height)
         }
 
         private func restoreScrollIfNeeded() {
@@ -105,7 +105,7 @@ struct MarkdownPreviewView: NSViewRepresentable {
                 let viewport = scrollView.contentView.bounds.height
                 let maximum = max(0, height - viewport)
                 let target = min(maximum, fraction * height)
-                scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentOffset.x, y: target))
+                scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.origin.x, y: target))
                 scrollView.reflectScrolledClipView(scrollView.contentView)
                 self.isRestoringScroll = false
             }
