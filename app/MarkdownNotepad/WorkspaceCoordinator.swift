@@ -212,10 +212,14 @@ final class WorkspaceCoordinator: ObservableObject {
         alert.informativeText = """
         A plain-text Markdown editor.
 
-        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘W close
+        File: ⌘N new window · ⌘O open · ⌘S save · ⇧⌘S save as · ⌘R rename · ⇧⌘M save location · ⌘W close
         Edit: ⌘F find · ⌥⌘F find and replace · ⌘G next match · ⌘L go to line
         View: preview ⇧⌘P, word wrap, zoom, full screen
         Window: tab overview · merge all windows
+
+        Double-click a window title to rename the document, or use the chevron
+        beside the title to choose its folder. Existing files are never
+        overwritten silently.
 
         Files are saved as plain UTF-8 text. Markdown syntax is never rewritten.
         """

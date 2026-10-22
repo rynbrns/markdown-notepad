@@ -187,6 +187,92 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.terminate()
     }
 
+    // MARK: - Interactive title bar
+
+    func test05TitleBarRenameCommitsAndCancelKeepsName() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("Rename through the title bar.")
+
+        let titleBarName = app.descendants(matching: .any)["titleBarNameField"]
+        XCTAssertTrue(titleBarName.waitForExistence(timeout: 5),
+                      "The title bar should expose a document name field")
+
+        titleBarName.doubleClick()
+        let editingField = app.textFields["titleBarNameField"]
+        XCTAssertTrue(editingField.waitForExistence(timeout: 5),
+                      "Double-clicking the title should make the name editable")
+        editingField.typeKey("a", modifierFlags: .command)
+        editingField.typeText("Renamed")
+        captureScreen(name: "12-title-bar-rename")
+        app.typeKey(.return, modifierFlags: [])
+
+        let statusName = app.staticTexts["documentName"]
+        XCTAssertTrue(statusName.waitForExistence(timeout: 5))
+        XCTAssertEqual(statusName.label, "Renamed.md",
+                       "Committing the rename should update the document title")
+
+        let titleBarAgain = app.descendants(matching: .any)["titleBarNameField"]
+        titleBarAgain.doubleClick()
+        let secondEdit = app.textFields["titleBarNameField"]
+        XCTAssertTrue(secondEdit.waitForExistence(timeout: 5))
+        secondEdit.typeKey("a", modifierFlags: .command)
+        secondEdit.typeText("Never committed")
+        app.typeKey(.escape, modifierFlags: [])
+
+        XCTAssertEqual(app.staticTexts["documentName"].label, "Renamed.md",
+                       "Escape should discard the in-progress rename")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
+    // MARK: - Formatting shortcuts
+
+    func test06MarkdownFormattingShortcuts() throws {
+        let app = launchApp()
+        let editor = newWindowAndFocusEditor(app)
+        editor.typeText("alpha\nbeta")
+
+        app.menuBars.menuBarItems["Editor"].click()
+        XCTAssertTrue(app.menuBars.menuItems["Bold"].waitForExistence(timeout: 3),
+                      "The Editor menu should expose Bold")
+        XCTAssertTrue(app.menuBars.menuItems["Unordered List"].exists,
+                      "The Editor menu should expose list commands")
+        app.typeKey(.escape, modifierFlags: [])
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("b", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "**alpha\nbeta**", "⌘B should wrap the selection")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta", "⌘Z should restore the exact text")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("8", modifierFlags: [.command, .shift])
+        XCTAssertEqual(editor.value as? String, "- alpha\n- beta", "⇧⌘8 should bullet every line")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("1", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "# alpha\n# beta", "⌘1 should set Heading 1")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey("k", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "[alpha\nbeta](url)", "⌘K should insert a link")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "alpha\nbeta")
+
+        app.typeKey("w", modifierFlags: .command)
+        let prompt = waitForUnsavedPrompt(app)
+        prompt.buttons["Don’t Save"].click()
+        app.terminate()
+    }
+
     // MARK: - Helpers
 
     private func launchApp(dark: Bool = false) -> XCUIApplication {

@@ -63,6 +63,20 @@ default, regex toggle, replace-all, match highlighting) are available.
   regex searches.
 - **Appearance:** semantic AppKit colours throughout, so light/dark mode follows
   the system; UI tests force dark mode and capture a screenshot.
+- **Interactive title bar:** the window title is a native title-bar accessory.
+  Double-click it (or press ⌘R / File > Rename…) to edit the document name;
+  Return commits and Escape cancels. A disclosure chevron beside the title opens
+  a popover showing the current folder and a **Choose Folder…** button backed by
+  a native `NSOpenPanel` directory picker. The file is moved (or, for an
+  untitled document, saved) only after the move/save confirmation.
+- **Rename and save-location safety:** names are normalized to one `.md`
+  filename (`notes` → `notes.md`; an existing extension is kept, so
+  `notes.txt` → `notes.txt.md`). Slashes, colons, control characters, empty
+  names, and hidden-dot names are rejected. Rename and folder moves use
+  no-clobber semantics: if the destination exists, the operation is refused and
+  neither file is changed. Untitled documents remember the new name and use it
+  on the next save. `representedURL` and the window `title` stay in sync for
+  tabs, the Window menu, and VoiceOver.
 
 ## File-format guarantees (M1)
 
@@ -201,4 +215,7 @@ VERSION=0.1.0 ./scripts/verify-release.sh
   crash-recovery snapshots cover the data-safety paths.
 - The app builds from `app/project.yml`; the generated `.xcodeproj` is ignored
   by git on purpose.
+- Double-clicking this app's title bar starts a rename instead of the system
+  "double-click title bar to zoom/minimize" action, matching the product
+  request. The title bar remains draggable for moving the window.
 - Not a WYSIWYG editor. The product is a plain-text markdown notepad.

@@ -87,6 +87,18 @@ struct DocumentCommands: Commands {
             .keyboardShortcut("s", modifiers: [.command, .shift])
             .disabled(session == nil)
 
+            Button("Rename…") {
+                session?.beginRenaming()
+            }
+            .keyboardShortcut("r")
+            .disabled(session == nil)
+
+            Button("Choose Save Location…") {
+                session?.presentSaveLocationPicker()
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
             Button("Revert to Saved") {
                 session?.revertToSaved()
             }

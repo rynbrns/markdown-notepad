@@ -128,6 +128,60 @@ public struct MarkdownFileIO: Sendable {
             ?? FileFingerprint(byteCount: data.count, modificationTime: nil, sha256: SHA256.hexDigest(of: data))
     }
 
+    /// Writes a brand-new file and refuses to replace an existing one.
+    ///
+    /// This is the save path behind "rename an untitled document" and "choose a
+    /// save folder": the user has not approved an overwrite, so a name clash is
+    /// surfaced as `MarkdownCoreError.destinationExists` and the existing bytes
+    /// are left untouched.
+    @discardableResult
+    public func saveNew(_ textFile: TextFile, to url: URL) throws -> FileFingerprint {
+        guard !FileManager.default.fileExists(atPath: url.path) else {
+            throw MarkdownCoreError.destinationExists
+        }
+        return try saveAs(textFile, to: url)
+    }
+
+    /// Moves a document to a new path without replacing an existing file.
+    ///
+    /// Used by the inline title-bar rename and "choose save location". The move
+    /// only happens when the destination does not exist; a clash throws
+    /// `MarkdownCoreError.destinationExists` and both files are left as they
+    /// were. `FileManager.moveItem` performs the atomic same-volume rename and
+    /// falls back to copy-and-delete across volumes.
+    @discardableResult
+    public func move(_ source: URL, to destination: URL) throws -> URL {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: source.path) else {
+            throw MarkdownCoreError.fileNotFound
+        }
+        if MarkdownFilename.isSameFile(source, destination) {
+            return destination
+        }
+
+        let destinationDirectory = destination.deletingLastPathComponent()
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: destinationDirectory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw MarkdownCoreError.directoryNotFound
+        }
+        guard !fileManager.fileExists(atPath: destination.path) else {
+            throw MarkdownCoreError.destinationExists
+        }
+
+        do {
+            try fileManager.moveItem(at: source, to: destination)
+        } catch {
+            if fileManager.fileExists(atPath: destination.path),
+               !fileManager.fileExists(atPath: source.path) {
+                // The move completed before an unrelated error was reported.
+                return destination
+            }
+            throw FileSystemError.map(error, url: destination)
+        }
+        return destination
+    }
+
     // MARK: - Trash
 
     /// Moves a file to the system Trash and returns the resulting URL when known.
