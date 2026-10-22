@@ -23,7 +23,6 @@ struct MarkdownNotepadApp: App {
         }
         .commands {
             DocumentCommands()
-            MarkdownFormattingCommands()
         }
     }
 }
@@ -230,6 +229,8 @@ struct DocumentCommands: Commands {
                 workspace.showHelp()
             }
         }
+
+        MarkdownFormattingCommands(session: session)
     }
 
     private func modeShortcut(for mode: EditorMode) -> KeyboardShortcut {

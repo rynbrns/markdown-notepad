@@ -21,7 +21,7 @@ enum MarkdownFormattingAction {
 /// The Editor menu. Every item carries the same shortcut that the text view
 /// responds to, so the glyphs are discoverable from the menu bar.
 struct MarkdownFormattingCommands: Commands {
-    @FocusedValue(\.documentSession) private var session
+    let session: DocumentSession?
 
     var body: some Commands {
         CommandMenu("Editor") {

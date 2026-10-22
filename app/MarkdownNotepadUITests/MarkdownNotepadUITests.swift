@@ -361,6 +361,7 @@ final class MarkdownNotepadUITests: XCTestCase {
     private func waitForMode(_ app: XCUIApplication, _ title: String, timeout: TimeInterval = 5) -> Bool {
         let marker = app.staticTexts["activeMode"]
         guard marker.waitForExistence(timeout: timeout) else { return false }
+        print("MODE WAIT expected '\(title)' actual '\(marker.label)'")
         let predicate = NSPredicate(format: "label == %@", title)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: marker)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
