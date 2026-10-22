@@ -73,18 +73,38 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Verify app icon integration
+        run: |
+          app="$(find app/.derivedData/Build/Products/Debug -maxdepth 1 -type d -name 'MarkdownNotepad.app' -print -quit)"
+          test -n "$app"
+          ./scripts/verify-app-icon.sh "$app"
+
+      - name: Capture app icon evidence (Dock/Finder)
+        env:
+          SCREENSHOT_DIR: /tmp/markdown-notepad-ui-screenshots
+          ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
+        run: |
+          set -o pipefail
+          rm -rf /tmp/icon-evidence.xcresult
+          xcodebuild test \
+            -project app/MarkdownNotepad.xcodeproj \
+            -scheme MarkdownNotepad \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath app/.derivedData \
+            -resultBundlePath /tmp/icon-evidence.xcresult \
+            -only-testing:MarkdownNotepadUITests/MarkdownNotepadUITests/test05AppIconInDockAndFinder \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee /tmp/icon-evidence.log
+
       - name: Verify Markdown document registration
         env:
           EVIDENCE_FILE: ${{ github.workspace }}/app/document-type-verification.md
         run: |
           ./scripts/verify-document-types.sh \
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
-
-      - name: Verify app icon integration
-        run: |
-          app="$(find app/.derivedData/Build/Products/Debug -maxdepth 1 -type d -name 'MarkdownNotepad.app' -print -quit)"
-          test -n "$app"
-          ./scripts/verify-app-icon.sh "$app"
 
       - name: Run XCUITest smoke and screenshot suite
         env:
@@ -115,4 +135,6 @@ jobs:
             app/xcodebuild-test.log
             app/document-type-verification.md
             /tmp/markdown-notepad-ui-screenshots
+            /tmp/icon-evidence.log
+            /tmp/icon-evidence.xcresult
           if-no-files-found: warn
