@@ -83,7 +83,14 @@ APP_PLIST="$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP_PLIST"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PLIST"
 /usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP_PLIST"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSItemContentTypes' "$APP_PLIST"
+/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$APP_PLIST"
 lipo -info "$APP/Contents/MacOS/MarkdownNotepad"
+
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSItemContentTypes:0' "$APP_PLIST")" == "net.daringfireball.markdown" ]] \
+  || { echo "ERROR: app does not advertise the Markdown document type" >&2; exit 1; }
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:LSHandlerRank' "$APP_PLIST")" == "Alternate" ]] \
+  || { echo "ERROR: Markdown document type must use LSHandlerRank Alternate" >&2; exit 1; }
 
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PLIST")" == "com.ryanpaperclip.markdownnotepad" ]] \
   || { echo "ERROR: unexpected bundle identifier" >&2; exit 1; }

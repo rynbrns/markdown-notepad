@@ -73,6 +73,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      - name: Verify Markdown document registration
+        env:
+          EVIDENCE_FILE: ${{ github.workspace }}/app/document-type-verification.md
+        run: |
+          ./scripts/verify-document-types.sh \
+            "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
+
       - name: Run XCUITest smoke and screenshot suite
         env:
           SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
@@ -99,4 +106,5 @@ jobs:
           path: |
             app/TestResults.xcresult
             app/xcodebuild-test.log
+            app/document-type-verification.md
           if-no-files-found: warn

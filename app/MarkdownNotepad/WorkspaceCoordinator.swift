@@ -51,7 +51,13 @@ final class WorkspaceCoordinator: ObservableObject {
     func makeInitialSession() -> DocumentSession {
         if !didLoadRestoration {
             didLoadRestoration = true
-            pendingURLs = isUITesting ? [] : restorationStore.load()
+            if !isUITesting {
+                let restored = restorationStore.load()
+                // A file opened from Finder before the first window was created
+                // takes precedence over the restored session; the restored
+                // windows follow it.
+                pendingURLs.append(contentsOf: restored.filter { !pendingURLs.contains($0) })
+            }
         }
         let recover = isFirstSession && pendingURLs.isEmpty && !isUITesting
         isFirstSession = false
@@ -106,6 +112,41 @@ final class WorkspaceCoordinator: ObservableObject {
     func persistOpenDocuments() {
         let urls = liveSessions.compactMap(\.fileURL)
         try? restorationStore.save(urls)
+    }
+
+    // MARK: - Files opened by Launch Services
+
+    /// Handles a `.md` file opened from Finder (double-click, Open With, Dock
+    /// drop) or with `open -a "Markdown Notepad" file.md`.
+    ///
+    /// The file is loaded into an existing pristine window when there is one,
+    /// so launching the app by opening a file never leaves an extra blank
+    /// window behind. Additional files each get their own window.
+    func receiveOpen(_ urls: [URL]) {
+        var queue = urls
+            .map(\.standardizedFileURL)
+            .filter { !pendingURLs.contains($0) }
+        guard !queue.isEmpty else { return }
+
+        queue.removeAll { url in
+            guard let existing = liveSessions.first(where: {
+                $0.fileURL?.standardizedFileURL == url
+            }) else { return false }
+            existing.focusWindow()
+            return true
+        }
+        guard !queue.isEmpty else { return }
+
+        if let blank = liveSessions.first(where: { $0.isPristineUntitled }) {
+            blank.load(url: queue.removeFirst())
+            guard !queue.isEmpty else { return }
+        }
+
+        pendingURLs.append(contentsOf: queue)
+        guard let openWindowHandler else { return }
+        for _ in 0..<queue.count {
+            openWindowHandler(Self.editorWindowID)
+        }
     }
 
     // MARK: - Actions
@@ -181,6 +222,36 @@ final class WorkspaceCoordinator: ObservableObject {
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }
+
+    #if DEBUG
+    /// CI verification hook. `-openProbe <path>` makes a Debug build write the
+    /// windows it actually ended up with once Launch Services has delivered any
+    /// file-open event, so CI can prove a launched-by-file run has one window
+    /// and no blank leftover.
+    func writeOpenProbeIfRequested() {
+        guard let path = UserDefaults.standard.string(forKey: "openProbe"), !path.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self else { return }
+            let sessions: [[String: Any]] = self.liveSessions.map { session in
+                [
+                    "path": session.fileURL?.path ?? NSNull(),
+                    "title": session.displayName,
+                    "dirty": session.isDirty
+                ]
+            }
+            let payload: [String: Any] = [
+                "sessionCount": sessions.count,
+                "visibleWindowCount": NSApp.windows.filter { $0.isVisible && $0.canBecomeMain }.count,
+                "sessions": sessions
+            ]
+            guard let data = try? JSONSerialization.data(
+                withJSONObject: payload,
+                options: [.prettyPrinted, .sortedKeys]
+            ) else { return }
+            try? data.write(to: URL(fileURLWithPath: path), options: .atomic)
+        }
+    }
+    #endif
 
     private static var textContentTypes: [UTType] {
         var types: [UTType] = []

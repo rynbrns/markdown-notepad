@@ -212,6 +212,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        WorkspaceCoordinator.shared.writeOpenProbeIfRequested()
+        #endif
+    }
+
+    /// Finder double-click, Open With, a Dock drop, and
+    /// `open -a "Markdown Notepad" file.md` all arrive here.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        WorkspaceCoordinator.shared.receiveOpen(urls)
+    }
+
+    /// Legacy fallback for AppKit versions that still send the single-file
+    /// variant instead of `application(_:open:)`.
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        WorkspaceCoordinator.shared.receiveOpen([URL(fileURLWithPath: filename)])
+        return true
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         WorkspaceCoordinator.shared.prepareForTermination() ? .terminateNow : .terminateCancel
     }

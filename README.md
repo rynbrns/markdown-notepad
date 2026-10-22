@@ -125,6 +125,43 @@ The build is ad-hoc signed, so macOS may warn that the app is from an unidentifi
 xattr -dr com.apple.quarantine "/Applications/Markdown Notepad.app"
 ```
 
+## Opening Markdown files from Finder
+
+The app registers itself with Launch Services as a Markdown editor, so it shows
+up in **Open With** without taking over any file type at install time:
+
+- `Info.plist` claims `net.daringfireball.markdown` (declared as an imported type
+  that conforms to `public.plain-text`, with `.md`, `.markdown`, `.mdown`,
+  `.mkdn`, `.mkd`, `.markdn` extensions), also accepts `public.markdown`, and
+  keeps a `public.plain-text` fallback so plain-text files can still be opened
+  on request.
+- Every document type uses `LSHandlerRank = Alternate` and
+  `CFBundleTypeRole = Editor`. The app never becomes a default handler on its
+  own, and it does not claim `public.data` or a wildcard extension.
+- Double-clicking a `.md` file, right-click → **Open With**, or
+  `open -a "Markdown Notepad" notes.md` loads that file into one editor window
+  and suppresses the extra blank window. If the same file is already open, its
+  window is brought forward instead of opening a second copy.
+
+To make Markdown Notepad the **default** Markdown app:
+
+1. In Finder, select any `.md` file.
+2. Press ⌘I (**Get Info**), open **Open with**, and choose **Markdown Notepad**.
+3. Click **Change All…**, then **Continue**.
+
+Or right-click the file → **Open With** → **Other…**, pick **Markdown Notepad**,
+and tick **Always Open With**. Undo the same way by choosing another app.
+
+To verify the registration on a Mac (checks the plist claims, the Open With
+list, Set as Default, and a real launch-with-file run):
+
+```bash
+./scripts/verify-document-types.sh "/Applications/Markdown Notepad.app"
+```
+
+CI runs the same script on every macOS build and uploads the report as
+`document-type-verification.md`.
+
 ## Building and verifying a release locally
 
 Requires macOS 14+, Xcode 15.4+, and `brew install xcodegen`.

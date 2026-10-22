@@ -81,6 +81,13 @@ final class DocumentSession: ObservableObject, Identifiable {
     var displayName: String { state.displayName }
     var windowTitle: String { isDirty ? "\(displayName) — Edited" : displayName }
 
+    /// True when the window has never held a document and carries no edits, so
+    /// a file opened from Finder can reuse it instead of leaving a blank
+    /// window behind.
+    var isPristineUntitled: Bool {
+        fileURL == nil && text.isEmpty && !isDirty && !recoveredFromCrash
+    }
+
     // MARK: - Editing
 
     func userEdited(_ newText: String) {
@@ -447,6 +454,13 @@ final class DocumentSession: ObservableObject, Identifiable {
     func refreshWindowChrome() {
         window?.isDocumentEdited = isDirty
         window?.title = windowTitle
+    }
+
+    /// Brings this document's window to the front (used when the same file is
+    /// opened again from Finder while it is already open).
+    func focusWindow() {
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowDidResize() {
