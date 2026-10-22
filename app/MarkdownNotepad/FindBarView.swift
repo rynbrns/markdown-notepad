@@ -113,6 +113,7 @@ struct FindBarView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .accessibilityIdentifier("findMatchCount")
+                .accessibilityLabel(Text("\(controller.currentIndex + 1) of \(controller.matchCount)"))
         }
     }
 }
