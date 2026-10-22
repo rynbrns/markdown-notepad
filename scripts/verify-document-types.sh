@@ -125,6 +125,13 @@ SWIFT
 xcrun swiftc -O -o "$LSINFO" "$WORK/lsinfo.swift"
 
 PREVIOUS_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
+
+# Give the markdown type an existing default handler (TextEdit can open plain
+# text) so we can prove registration does not steal it. Alternate handler rank
+# must leave an existing default alone.
+"$LSINFO" set-default "$MARKDOWN_UTI" com.apple.TextEdit >/dev/null 2>&1 || true
+CONTROL_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
+
 log "Install the app in /Applications and ad-hoc sign it"
 if pgrep -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" >/dev/null; then
   pkill -f "$INSTALLED_APP/Contents/MacOS/MarkdownNotepad" || true
@@ -141,6 +148,16 @@ ditto "$APP_SOURCE" "$INSTALLED_APP"
 codesign --force --deep --sign - "$INSTALLED_APP" >/dev/null
 codesign --verify --deep --strict "$INSTALLED_APP"
 "$LSREGISTER" -f "$INSTALLED_APP"
+
+if [[ "$CONTROL_DEFAULT" == "com.apple.TextEdit" ]]; then
+  AFTER_REGISTRATION_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
+  echo "Default handler after registering (another app owned it): $AFTER_REGISTRATION_DEFAULT" | tee -a "$REPORT"
+  [[ "$AFTER_REGISTRATION_DEFAULT" == "$CONTROL_DEFAULT" ]] \
+    || fail "registering the app stole the existing default handler $CONTROL_DEFAULT"
+  echo "Registration did not steal the existing Markdown default" | tee -a "$REPORT"
+else
+  echo "Skipped the steal check: could not make TextEdit the handler for $MARKDOWN_UTI" | tee -a "$REPORT"
+fi
 
 log "Registered handler claims"
 "$LSREGISTER" -dump > "$WORK/lsregister.txt"
@@ -162,13 +179,7 @@ fi
 echo "Open With list includes Markdown Notepad" | tee -a "$REPORT"
 
 log "Set as default, then confirm Launch Services routes .md to the app"
-echo "Default handler before registration: $PREVIOUS_DEFAULT" | tee -a "$REPORT"
-if [[ "$PREVIOUS_DEFAULT" != "none" && "$PREVIOUS_DEFAULT" != "$BUNDLE_ID" ]]; then
-  PRE_REGISTER_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
-  [[ "$PRE_REGISTER_DEFAULT" == "$PREVIOUS_DEFAULT" ]] \
-    || fail "registration replaced the existing default handler $PREVIOUS_DEFAULT with $PRE_REGISTER_DEFAULT"
-  echo "Registering did not take over the existing default handler" | tee -a "$REPORT"
-fi
+echo "Default handler before this script ran: $PREVIOUS_DEFAULT" | tee -a "$REPORT"
 SET_STATUS="$("$LSINFO" set-default "$MARKDOWN_UTI" "$BUNDLE_ID")"
 [[ "$SET_STATUS" == "0" ]] || fail "LSSetDefaultRoleHandlerForContentType returned $SET_STATUS"
 CURRENT_DEFAULT="$("$LSINFO" default "$MARKDOWN_UTI")"
