@@ -57,8 +57,11 @@ log "Verify Info.plist icon keys"
 log "Verify bundle resources"
 [[ -f "$RESOURCES/AppIcon.icns" ]] || fail "missing Contents/Resources/AppIcon.icns"
 [[ -f "$RESOURCES/Assets.car" ]] || fail "missing Contents/Resources/Assets.car (asset catalog did not compile)"
-log "Expand AppIcon.icns and verify representations"
-iconutil -c iconset "$RESOURCES/AppIcon.icns" -o "$TMP/AppIcon.iconset"
+log "Expand committed AppIcon.icns and verify representations"
+# Verify the committed artwork rather than the bundle's Xcode-generated icns:
+# actool is free to choose which representations to embed, but the source icon
+# must stay complete.
+iconutil -c iconset "$ROOT/artwork/AppIcon.icns" -o "$TMP/AppIcon.iconset"
 for entry in \
   icon_16x16.png:16 \
   icon_16x16@2x.png:32 \
