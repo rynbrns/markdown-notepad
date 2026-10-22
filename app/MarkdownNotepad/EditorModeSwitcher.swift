@@ -39,7 +39,6 @@ struct EditorModeSwitcher: View {
         }
         .padding(2)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 5))
-        .accessibilityIdentifier("modeSwitcher")
     }
 
     private func symbol(for mode: EditorMode) -> String {
