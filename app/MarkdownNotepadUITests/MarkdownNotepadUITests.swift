@@ -572,6 +572,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         editor.click()
         app.typeKey("z", modifierFlags: .command)
         XCTAssertTrue(editor.exists)
+        // An undo can return the document to its original empty state; type
+        // once more so closing still exercises the unsaved-changes prompt.
+        editor.typeText("x")
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
         prompt.buttons["Don’t Save"].click()
