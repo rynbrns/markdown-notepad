@@ -4,9 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Group by commit, not ref: a push and its pull_request event for the same
+  # commit share a group, so only one run consumes macOS minutes.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -34,8 +40,14 @@ jobs:
 
   macos-app:
     name: macOS / MarkdownNotepad
+    # macOS runners bill at 10x. Run them only for PRs, main, and manual
+    # dispatches; feature-branch pushes are covered by the PR event.
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch'
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -79,27 +91,6 @@ jobs:
           test -n "$app"
           ./scripts/verify-app-icon.sh "$app"
 
-      - name: Capture app icon evidence (Dock/Finder)
-        env:
-          SCREENSHOT_DIR: /tmp/markdown-notepad-ui-screenshots
-          ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
-        run: |
-          set -o pipefail
-          rm -rf /tmp/icon-evidence.xcresult
-          xcodebuild test \
-            -project app/MarkdownNotepad.xcodeproj \
-            -scheme MarkdownNotepad \
-            -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' \
-            -derivedDataPath app/.derivedData \
-            -resultBundlePath /tmp/icon-evidence.xcresult \
-            -only-testing:MarkdownNotepadUITests/MarkdownNotepadUITests/test08AppIconInDockAndFinder \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGNING_REQUIRED=NO \
-            2>&1 | tee /tmp/icon-evidence.log
-          grep -q "test08AppIconInDockAndFinder.*passed" /tmp/icon-evidence.log
-
       - name: Verify Markdown document registration
         env:
           EVIDENCE_FILE: ${{ github.workspace }}/app/document-type-verification.md
@@ -108,9 +99,6 @@ jobs:
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
 
       - name: Run XCUITest smoke and screenshot suite
-        env:
-          SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
-          ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
         run: |
           set -o pipefail
           rm -rf app/TestResults.xcresult
@@ -126,6 +114,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee app/xcodebuild-test.log
 
+      - name: Confirm icon evidence ran in the single UI suite
+        if: always()
+        run: grep -q "test08AppIconInDockAndFinder.*passed" app/xcodebuild-test.log
+
       - name: Upload UI test artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,6 +127,4 @@ jobs:
             app/TestResults.xcresult
             app/xcodebuild-test.log
             app/document-type-verification.md
-            /tmp/icon-evidence.log
-            /tmp/icon-evidence.xcresult
           if-no-files-found: warn

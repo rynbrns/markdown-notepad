@@ -183,7 +183,13 @@ If Swift is not installed, download the Linux toolchain from
 | `macos-app` | `macos-14` | `swift test` passes on Darwin file paths, XcodeGen regenerates the project, `xcodebuild build` succeeds for arm64, and the XCUITest smoke + screenshot suite passes |
 | `release` (`.github/workflows/release.yml`) | `macos-14` | archives a Release arm64 build, ad-hoc signs it, mounts the `.dmg`, copies the app out, verifies the signature, launches the app, and publishes the `.dmg` |
 
-Both CI jobs run on every pull request and on pushes to `main`. The release workflow runs on a `v*` tag or manually, and uploads the `.dmg` as a workflow artifact plus a GitHub Release asset.
+`linux-core` runs on every pull request, every push to `main`, and manual
+dispatch. `macos-app` runs only for pull requests, pushes to `main`, and manual
+dispatch; a feature-branch push starts no run by itself. The XCUITest suite runs
+once per macOS job. See [`docs/ci.md`](docs/ci.md) for the cost accounting and
+the local commands that avoid GitHub macOS minutes. The release workflow runs on
+a `v*` tag or manually, and uploads the `.dmg` as a workflow artifact plus a
+GitHub Release asset.
 
 ## App icon
 
