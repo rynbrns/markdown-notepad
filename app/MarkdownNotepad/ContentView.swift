@@ -66,34 +66,7 @@ struct ContentView: View {
             statusBar
         }
         .navigationTitle(session.windowTitle)
-        .alert(
-            "File changed on disk",
-            isPresented: Binding(
-                get: { session.conflictPrompt != nil },
-                set: { isPresented in
-                    if !isPresented { session.conflictPrompt = nil }
-                }
-            ),
-            presenting: session.conflictPrompt
-        ) { _ in
-            Button("Reload") {
-                session.conflictPrompt = nil
-                session.reloadFromDisk()
-            }
-            Button("Overwrite") {
-                session.conflictPrompt = nil
-                session.overwriteWithCurrentText()
-            }
-            Button("Save As…") {
-                session.conflictPrompt = nil
-                session.saveAs()
-            }
-            Button("Cancel", role: .cancel) {
-                session.conflictPrompt = nil
-            }
-        } message: { _ in
-            Text("“\(session.displayName)” was changed by another app after you opened it. Choose how to continue.")
-        }
+
     }
 
     private var recoveredBanner: some View {
@@ -123,6 +96,7 @@ struct ContentView: View {
             Text(session.formatLabel)
             Text("·")
             Text(session.modeLabel)
+            EditorModeSwitcher(session: session)
             if session.isPreviewVisible {
                 Text("·")
                 Text("Preview")
@@ -130,7 +104,6 @@ struct ContentView: View {
                     .accessibilityLabel("Preview pane visible")
             }
             Spacer()
-            EditorModeSwitcher(session: session)
             if session.isDirty {
                 Text("Edited")
                     .foregroundStyle(.orange)

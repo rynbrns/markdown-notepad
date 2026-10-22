@@ -11,11 +11,6 @@ import UniformTypeIdentifiers
 /// multiple windows each have independent dirty state, undo history, and find
 /// state.
 final class DocumentSession: ObservableObject, Identifiable {
-    enum ConflictPrompt: Int, Identifiable {
-        case externalChange
-        var id: Int { rawValue }
-    }
-
     let id = UUID()
 
     @Published private(set) var state: DocumentDirtyState
@@ -25,7 +20,6 @@ final class DocumentSession: ObservableObject, Identifiable {
     /// The filename an untitled document should use on its first save, set by
     /// the inline title-bar rename before a file exists on disk.
     @Published private(set) var untitledName: String?
-    @Published var conflictPrompt: ConflictPrompt?
     @Published private(set) var wordWrap = true
     @Published private(set) var fontSize: CGFloat = 14
     /// The active presentation mode. The underlying `state.text` is identical
@@ -238,12 +232,36 @@ final class DocumentSession: ObservableObject, Identifiable {
             if !FileManager.default.fileExists(atPath: url.path) {
                 presentMissingFileSaveAs(url: url)
             } else {
-                conflictPrompt = .externalChange
+                presentConflictPrompt(url: url)
             }
         } catch MarkdownCoreError.permissionDenied {
             presentReadOnlySaveAs(url: url)
         } catch {
             present(error)
+        }
+    }
+
+    /// File changed on disk. Never silently overwrite; offer the four
+    /// documented choices. This is an NSAlert (like the other document
+    /// prompts) so every button is reachable by keyboard and VoiceOver.
+    private func presentConflictPrompt(url: URL) {
+        let alert = NSAlert()
+        alert.messageText = "File changed on disk"
+        alert.informativeText = "“\(url.lastPathComponent)” was changed by another app after you opened it. Choose how to continue."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Reload")
+        alert.addButton(withTitle: "Overwrite")
+        alert.addButton(withTitle: "Save As…")
+        alert.addButton(withTitle: "Cancel")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            reloadFromDisk()
+        case .alertSecondButtonReturn:
+            overwriteWithCurrentText()
+        case .alertThirdButtonReturn:
+            saveAs()
+        default:
+            break
         }
     }
 

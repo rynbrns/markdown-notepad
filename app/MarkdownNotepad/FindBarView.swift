@@ -119,10 +119,10 @@ struct FindBarView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Text(verbatim: counterText)
+            Text(counterText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel(Text(verbatim: counterText))
+                .accessibilityLabel(counterText)
                 .accessibilityIdentifier("findStatus")
         }
     }

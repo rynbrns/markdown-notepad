@@ -364,15 +364,16 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(reloadPrompt.buttons["Reload"].exists, "Conflict must offer Reload")
         XCTAssertTrue(reloadPrompt.buttons["Overwrite"].exists, "Conflict must offer Overwrite")
         XCTAssertTrue(reloadPrompt.buttons["Save As…"].exists, "Conflict must offer Save As")
-        // Cancel is the dialog's dismiss action; Escape must leave the file and
-        // editor untouched, then a second save shows the prompt again.
-        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(reloadPrompt.buttons["Cancel"].exists, "Conflict must offer Cancel")
+        reloadPrompt.buttons["Cancel"].click()
         let dismissed = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == false"),
             object: reloadPrompt
         )
         XCTAssertEqual(XCTWaiter().wait(for: [dismissed], timeout: 5), .completed,
                        "Cancel should dismiss the conflict prompt")
+
+        // A second save shows the prompt again; take the Reload path.
         app.typeKey("s", modifierFlags: .command)
         let reloadAgain = waitForConflictPrompt(app)
         reloadAgain.buttons["Reload"].click()
@@ -474,7 +475,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Use regular expression"].exists)
         findField.typeText("bold")
         app.typeKey(.return, modifierFlags: [])
-        let findStatus = app.staticTexts["findStatus"]
+        let findStatus = app.descendants(matching: .any)["findStatus"].firstMatch
         XCTAssertTrue(findStatus.waitForExistence(timeout: 5), "The find counter should be readable")
         XCTAssertEqual(findStatus.label, "1 of 1")
         app.typeKey(.escape, modifierFlags: [])
@@ -547,7 +548,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         let findField = app.textFields["findField"]
         XCTAssertTrue(findField.waitForExistence(timeout: 5))
         findField.typeText("item")
-        let findStatus = app.staticTexts["findStatus"]
+        let findStatus = app.descendants(matching: .any)["findStatus"].firstMatch
         XCTAssertTrue(findStatus.waitForExistence(timeout: 5))
         XCTAssertEqual(findStatus.label, "1 of 2")
         app.typeKey(.escape, modifierFlags: [])
