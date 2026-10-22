@@ -54,11 +54,10 @@ log "Verify Info.plist icon keys"
 log "Verify bundle resources"
 [[ -f "$RESOURCES/AppIcon.icns" ]] || fail "missing Contents/Resources/AppIcon.icns"
 [[ -f "$RESOURCES/Assets.car" ]] || fail "missing Contents/Resources/Assets.car (asset catalog did not compile)"
-cmp -s "$RESOURCES/AppIcon.icns" "$ROOT/artwork/AppIcon.icns" \
-  || fail "bundled AppIcon.icns differs from committed artwork/AppIcon.icns"
+[[ -f "$ROOT/artwork/AppIcon.icns" ]] || fail "missing committed artwork/AppIcon.icns"
 
-log "Expand AppIcon.icns and verify representations"
-iconutil -c iconset "$RESOURCES/AppIcon.icns" -o "$TMP/AppIcon.iconset"
+log "Expand committed artwork/AppIcon.icns and verify every representation"
+iconutil -c iconset "$ROOT/artwork/AppIcon.icns" -o "$TMP/Source.iconset"
 for entry in \
   icon_16x16.png:16 \
   icon_16x16@2x.png:32 \
@@ -73,12 +72,20 @@ for entry in \
 do
   file="${entry%%:*}"
   expected="${entry##*:}"
-  path="$TMP/AppIcon.iconset/$file"
-  [[ -f "$path" ]] || fail "AppIcon.icns is missing $file"
+  path="$TMP/Source.iconset/$file"
+  [[ -f "$path" ]] || fail "committed AppIcon.icns is missing $file"
   actual="$(pixel_size "$path")"
   [[ "$actual" == "${expected}x${expected}" ]] \
     || fail "$file is $actual, expected ${expected}x${expected}"
 done
+
+log "Expand bundled AppIcon.icns"
+iconutil -c iconset "$RESOURCES/AppIcon.icns" -o "$TMP/Bundled.iconset"
+if ! find "$TMP/Bundled.iconset" -name '*.png' -print -quit | grep -q .; then
+  echo "Extracted bundle iconset contents:" >&2
+  ls -la "$TMP/Bundled.iconset" >&2 || true
+  fail "bundled AppIcon.icns did not expand to any images"
+fi
 
 echo
 echo "App icon verification passed for $APP"

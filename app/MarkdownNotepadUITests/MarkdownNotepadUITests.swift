@@ -164,26 +164,23 @@ final class MarkdownNotepadUITests: XCTestCase {
         sleep(4)
         captureScreen(name: "12-icon-in-dock")
 
-        if let source = ProcessInfo.processInfo.environment["ICON_EVIDENCE_APP"], !source.isEmpty {
-            let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-                .appendingPathComponent("MarkdownNotepadIconEvidence", isDirectory: true)
-            let destination = folder.appendingPathComponent("Markdown Notepad.app", isDirectory: true)
-            let fileManager = FileManager.default
-            try? fileManager.removeItem(at: folder)
-            try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
-            do {
-                try fileManager.copyItem(at: URL(fileURLWithPath: source), to: destination)
-                NSWorkspace.shared.activateFileViewerSelecting([destination])
-                sleep(4)
-                captureScreen(name: "13-icon-in-finder")
-            } catch {
-                print("ICON EVIDENCE COPY FAILED: \(error)")
-            }
+        let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ryanpaperclip.markdownnotepad")
+            ?? Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MarkdownNotepad.app")
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("MarkdownNotepadIconEvidence", isDirectory: true)
+        let destination = folder.appendingPathComponent("Markdown Notepad.app", isDirectory: true)
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: folder)
+        try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        do {
+            try fileManager.copyItem(at: appURL, to: destination)
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
+            sleep(4)
+            captureScreen(name: "13-icon-in-finder")
+        } catch {
+            print("ICON EVIDENCE COPY FAILED \(appURL.path): \(error)")
         }
 
-        app.typeKey("w", modifierFlags: .command)
-        let prompt = waitForUnsavedPrompt(app)
-        prompt.buttons["Don’t Save"].click()
         app.terminate()
     }
 
