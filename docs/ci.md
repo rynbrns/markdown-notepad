@@ -59,8 +59,14 @@ workflow.
   XcodeGen regenerates the project, the arm64 Debug build succeeds, the icon and
   document-type verifiers pass, and the full XCUITest smoke + screenshot suite
   runs exactly once.
-- `macos-ui-test-artifacts`: `TestResults.xcresult`, `xcodebuild-test.log`,
-  `document-type-verification.md`, and `app/.ui-screenshots`.
+- `macos-ui-test-artifacts`: `TestResults.xcresult` (test results plus every
+  screenshot as an XCTAttachment), `xcodebuild-test.log`, and
+  `document-type-verification.md`.
+
+The UI tests also try to write PNGs to `SCREENSHOT_DIR`, but the sandboxed test
+runner does not reliably receive that variable and cannot write to `/tmp`. Those
+side-writes are best-effort; the authoritative screenshots are the attachments
+inside `TestResults.xcresult`.
 
 ## Local fallback (no GitHub minutes)
 
@@ -104,8 +110,6 @@ Run the full UI suite locally exactly as CI does:
 
 ```bash
 rm -rf app/TestResults.xcresult
-SCREENSHOT_DIR="$PWD/app/.ui-screenshots" \
-ICON_EVIDENCE_APP="$PWD/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app" \
 xcodebuild test \
   -project app/MarkdownNotepad.xcodeproj \
   -scheme MarkdownNotepad \
@@ -132,8 +136,11 @@ Inspect artifacts locally:
 
 ```bash
 xcrun xcresulttool get test-results summary --path app/TestResults.xcresult
+xcrun xcresulttool export attachments \
+  --path app/TestResults.xcresult \
+  --output-path app/ui-attachments
 open app/TestResults.xcresult
-ls app/.ui-screenshots
+ls app/ui-attachments
 ```
 
 ## Rules

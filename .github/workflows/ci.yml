@@ -99,9 +99,6 @@ jobs:
             "app/.derivedData/Build/Products/Debug/MarkdownNotepad.app"
 
       - name: Run XCUITest smoke and screenshot suite
-        env:
-          SCREENSHOT_DIR: ${{ github.workspace }}/app/.ui-screenshots
-          ICON_EVIDENCE_APP: ${{ github.workspace }}/app/.derivedData/Build/Products/Debug/MarkdownNotepad.app
         run: |
           set -o pipefail
           rm -rf app/TestResults.xcresult
@@ -130,5 +127,4 @@ jobs:
             app/TestResults.xcresult
             app/xcodebuild-test.log
             app/document-type-verification.md
-            app/.ui-screenshots
           if-no-files-found: warn
