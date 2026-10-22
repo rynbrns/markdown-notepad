@@ -165,3 +165,4 @@ jobs:
             app/.ui-screenshots
             /tmp/markdown-notepad-ui-screenshots
           if-no-files-found: warn
+          include-hidden-files: true
