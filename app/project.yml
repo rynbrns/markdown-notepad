@@ -1,0 +1,57 @@
+name: MarkdownNotepad
+options:
+  bundleIdPrefix: com.rynbrns
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  MarkdownCore:
+    path: ..
+
+settings:
+  base:
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  MarkdownNotepad:
+    type: application
+    platform: macOS
+    sources:
+      - path: MarkdownNotepad
+    dependencies:
+      - package: MarkdownCore
+        product: MarkdownCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rynbrns.MarkdownNotepad
+        PRODUCT_NAME: MarkdownNotepad
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Markdown Notepad
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Ryan Barnes. All rights reserved.
+        ENABLE_HARDENED_RUNTIME: NO
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+schemes:
+  MarkdownNotepad:
+    build:
+      targets:
+        MarkdownNotepad: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
