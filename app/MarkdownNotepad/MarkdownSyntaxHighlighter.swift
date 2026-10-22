@@ -1,19 +1,16 @@
 import AppKit
 import MarkdownCore
 
-/// Applies semantic styling to the TextKit 2 editor without changing the
+/// Applies semantic colours to the TextKit 2 editor without touching the
 /// document's characters.
 ///
-/// In source mode (Plain Text and Panels) it applies semantic colours as
-/// rendering attributes, parsed off the main thread in a line-oriented
-/// incremental index, so the find bar's background highlights stay composable.
-///
-/// In rich mode (WYSIWYG) it writes presentation-only text attributes: bold,
-/// italic, headings, inline code, and near-zero-width transparent Markdown
-/// markers. Characters are never inserted or removed, so the saved Markdown is
-/// byte-identical and selection ranges stay valid across mode switches.
+/// Parsing happens off the main thread in a line-oriented incremental index:
+/// an edit only rescans the changed line and, when scanner state allows it, the
+/// untouched suffix is reused. Rich presentation (the optional WYSIWYG mode)
+/// uses the same text storage and only assigns visual attributes, so switching
+/// modes can never rewrite the Markdown.
 final class MarkdownSyntaxHighlighter {
-    enum PresentationMode {
+    enum PresentationMode: Equatable {
         case source
         case rich
     }
@@ -26,73 +23,52 @@ final class MarkdownSyntaxHighlighter {
     )
     private var index = MarkdownSyntaxIndex()
     private var debounceWork: DispatchWorkItem?
-    private var richWork: DispatchWorkItem?
     private var generation = 0
-    private var richGeneration = 0
-
     private var mode: PresentationMode = .source
     private var fontSize: CGFloat = 14
-    private var renderedMode: PresentationMode = .source
 
     private let debounceInterval: TimeInterval = 0.03
     private let fullPassDelay: TimeInterval = 0.06
     private let chunkSize = 400
 
-    func attach(to textView: NSTextView) {
-        self.textView = textView
-        if mode == .rich {
-            applyRichNow(to: textView, clearRenderings: true)
-        } else {
+    func configure(mode: PresentationMode, fontSize: CGFloat) {
+        guard mode != self.mode || fontSize != self.fontSize else { return }
+        self.mode = mode
+        self.fontSize = fontSize
+        index = MarkdownSyntaxIndex()
+        if let textView {
             rehighlight(textView.string, hint: nil)
         }
+    }
+
+    func attach(to textView: NSTextView) {
+        self.textView = textView
+        rehighlight(textView.string, hint: nil)
     }
 
     func detach() {
         debounceWork?.cancel()
         debounceWork = nil
-        richWork?.cancel()
-        richWork = nil
         textView = nil
         generation += 1
-        richGeneration += 1
     }
 
-    /// Sets the presentation mode and base font size. A change re-renders the
-    /// current document immediately so the switch feels instantaneous.
-    func configure(mode: PresentationMode, fontSize: CGFloat) {
-        let changed = mode != self.mode || fontSize != self.fontSize
-        self.mode = mode
-        self.fontSize = fontSize
-        guard changed else { return }
-        guard let textView else { return }
-        debounceWork?.cancel()
-        richWork?.cancel()
-        if mode == .rich {
-            applyRichNow(to: textView, clearRenderings: true)
-        } else {
-            applySourceNow(to: textView)
-        }
+    /// Compatibility entry point for callers that do not have a selection hint.
+    func textDidChange(_ text: String) {
+        rehighlight(text, hint: nil)
     }
 
     /// Called by the editor delegate after every text change. `hint` is the
     /// current selection offset, which lets the index rescan only the edited
     /// tail instead of the whole document.
     func textDidChange(_ text: String, hint: Int?) {
-        if mode == .rich {
-            rehighlightRich(text)
-        } else {
-            rehighlight(text, hint: hint)
-        }
+        rehighlight(text, hint: hint)
     }
 
-    /// Re-applies styling after the find bar changes background rendering
-    /// attributes on the same ranges.
+    /// Re-applies foreground attributes after the find bar changes background
+    /// rendering attributes on the same ranges.
     func reapplyForeground() {
         guard let textView else { return }
-        if mode == .rich {
-            applyRichNow(to: textView, clearRenderings: false)
-            return
-        }
         let text = textView.string
         let visible = visibleCharacterRange(in: textView)
         let passGeneration = generation
@@ -107,81 +83,81 @@ final class MarkdownSyntaxHighlighter {
         }
     }
 
-    // MARK: - Source parsing
+    // MARK: - Parsing
 
     private func rehighlight(_ text: String, hint: Int?) {
         debounceWork?.cancel()
         generation += 1
         let parseGeneration = generation
         let snapshot = text
+        let currentMode = mode
+        let currentFontSize = fontSize
 
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             let update = self.index.update(text: snapshot, changedOffsetHint: hint)
-            guard !update.didRebuildEntireDocument || !update.spans.isEmpty || update.affectedRange.length > 0 else {
-                return
-            }
+            let runs = currentMode == .rich
+                ? MarkdownPresentation.runs(in: snapshot, spans: self.index.allSpans())
+                : []
             DispatchQueue.main.async {
                 guard parseGeneration == self.generation,
                       let textView = self.textView,
                       textView.string == snapshot else { return }
-                self.apply(update, textView: textView)
+                self.apply(update, runs: runs, mode: currentMode, fontSize: currentFontSize, textView: textView)
             }
         }
         debounceWork = work
         parseQueue.asyncAfter(deadline: .now() + debounceInterval, execute: work)
     }
 
-    /// Full source refresh used when leaving WYSIWYG, where incremental ranges
-    /// no longer describe the text storage's base attributes.
-    private func applySourceNow(to textView: NSTextView) {
-        generation += 1
-        let text = textView.string
-        resetStorage(to: sourceBaseAttributes, textView: textView, clearRenderings: false)
-        renderedMode = .source
-        let spans = MarkdownSyntax.spans(in: text)
-        let visible = visibleCharacterRange(in: textView)
-        guard let layoutManager = textView.textLayoutManager,
-              let contentStorage = layoutManager.textContentManager as? NSTextContentStorage else { return }
-        applySpans(
-            spans.filter { NSIntersectionRange($0.range, visible).length > 0 },
-            contentStorage: contentStorage,
-            layoutManager: layoutManager
-        )
-        let passGeneration = generation
-        DispatchQueue.main.asyncAfter(deadline: .now() + fullPassDelay) { [weak self] in
-            guard let self, passGeneration == self.generation else { return }
-            self.applyInChunks(
-                spans,
-                index: 0,
-                generation: passGeneration,
-                contentStorage: contentStorage,
-                layoutManager: layoutManager,
-                textView: textView
-            )
-        }
-    }
+    // MARK: - Applying
 
-    // MARK: - Source applying
-
-    private func apply(_ update: MarkdownSyntaxUpdate, textView: NSTextView) {
+    private func apply(
+        _ update: MarkdownSyntaxUpdate,
+        runs: [MarkdownPresentation.Run],
+        mode: PresentationMode,
+        fontSize: CGFloat,
+        textView: NSTextView
+    ) {
         guard let layoutManager = textView.textLayoutManager,
               let contentStorage = layoutManager.textContentManager as? NSTextContentStorage else { return }
 
-        if renderedMode != .source {
-            resetStorage(to: sourceBaseAttributes, textView: textView, clearRenderings: false)
-            renderedMode = .source
-        }
-
-        if update.affectedRange.length > 0 {
-            clearForeground(
-                range: update.affectedRange,
-                contentStorage: contentStorage,
-                layoutManager: layoutManager
-            )
+        let affected = update.affectedRange
+        if affected.length > 0 {
+            if update.didRebuildEntireDocument {
+                resetAttributes(
+                    range: affected,
+                    mode: mode,
+                    fontSize: fontSize,
+                    textView: textView,
+                    contentStorage: contentStorage,
+                    layoutManager: layoutManager
+                )
+            } else {
+                clearForeground(range: affected, contentStorage: contentStorage, layoutManager: layoutManager)
+            }
         }
 
         let visible = visibleCharacterRange(in: textView)
+        if mode == .rich {
+            let immediate = runs.filter { NSIntersectionRange($0.range, visible).length > 0 }
+            applyRuns(immediate, fontSize: fontSize, contentStorage: contentStorage, layoutManager: layoutManager)
+            let passGeneration = generation
+            DispatchQueue.main.asyncAfter(deadline: .now() + fullPassDelay) { [weak self] in
+                guard let self, passGeneration == self.generation else { return }
+                self.applyRunsInChunks(
+                    runs,
+                    index: 0,
+                    generation: passGeneration,
+                    fontSize: fontSize,
+                    contentStorage: contentStorage,
+                    layoutManager: layoutManager,
+                    textView: textView
+                )
+            }
+            return
+        }
+
         let immediate = update.spans.filter { NSIntersectionRange($0.range, visible).length > 0 }
         applySpans(immediate, contentStorage: contentStorage, layoutManager: layoutManager)
 
@@ -231,6 +207,37 @@ final class MarkdownSyntaxHighlighter {
         }
     }
 
+    private func applyRunsInChunks(
+        _ runs: [MarkdownPresentation.Run],
+        index: Int,
+        generation passGeneration: Int,
+        fontSize: CGFloat,
+        contentStorage: NSTextContentStorage,
+        layoutManager: NSTextLayoutManager,
+        textView: NSTextView
+    ) {
+        guard passGeneration == generation else { return }
+        let end = min(index + chunkSize, runs.count)
+        if index < end {
+            applyRuns(Array(runs[index..<end]), fontSize: fontSize, contentStorage: contentStorage, layoutManager: layoutManager)
+        }
+        if end < runs.count {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.002) { [weak self] in
+                self?.applyRunsInChunks(
+                    runs,
+                    index: end,
+                    generation: passGeneration,
+                    fontSize: fontSize,
+                    contentStorage: contentStorage,
+                    layoutManager: layoutManager,
+                    textView: textView
+                )
+            }
+        } else {
+            textView.needsDisplay = true
+        }
+    }
+
     private func applyVisible(
         _ spans: [MarkdownSyntaxSpan],
         textView: NSTextView,
@@ -252,13 +259,92 @@ final class MarkdownSyntaxHighlighter {
         layoutManager: NSTextLayoutManager
     ) {
         for span in spans {
-            setColor(
-                color(for: span.kind),
+            setAttributes(
+                [.foregroundColor: MarkdownSyntaxPalette.color(for: span.kind)],
                 range: span.range,
                 contentStorage: contentStorage,
                 layoutManager: layoutManager
             )
         }
+    }
+
+    private func applyRuns(
+        _ runs: [MarkdownPresentation.Run],
+        fontSize: CGFloat,
+        contentStorage: NSTextContentStorage,
+        layoutManager: NSTextLayoutManager
+    ) {
+        let baseFont = NSFont.systemFont(ofSize: fontSize)
+        for run in runs {
+            var attributes: [NSAttributedString.Key: Any] = [:]
+            switch run.style {
+            case .body:
+                attributes[.font] = baseFont
+                attributes[.foregroundColor] = NSColor.textColor
+            case .heading(let level):
+                attributes[.font] = NSFont.boldSystemFont(ofSize: headingSize(level: level, base: fontSize))
+                attributes[.foregroundColor] = NSColor.textColor
+            case .strong:
+                attributes[.font] = NSFont.boldSystemFont(ofSize: fontSize)
+            case .emphasis:
+                attributes[.font] = NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
+            case .strikethrough:
+                attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+            case .code, .codeBlock:
+                attributes[.font] = NSFont.monospacedSystemFont(ofSize: fontSize * 0.94, weight: .regular)
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .codeSpan)
+            case .link:
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .link)
+                attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+            case .image:
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .image)
+            case .blockQuote:
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .blockQuote)
+                attributes[.font] = NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
+            case .listMarker:
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .listMarker)
+            case .taskMarker:
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .taskMarker)
+            case .tableHeader:
+                attributes[.font] = NSFont.boldSystemFont(ofSize: fontSize)
+                attributes[.foregroundColor] = MarkdownSyntaxPalette.color(for: .tableHeader)
+            case .hidden:
+                attributes[.font] = NSFont.systemFont(ofSize: 0.1)
+                attributes[.foregroundColor] = NSColor.clear
+            }
+            setAttributes(attributes, range: run.range, contentStorage: contentStorage, layoutManager: layoutManager)
+        }
+    }
+
+    private func headingSize(level: Int, base: CGFloat) -> CGFloat {
+        switch level {
+        case 1: return base * 1.6
+        case 2: return base * 1.4
+        case 3: return base * 1.25
+        case 4: return base * 1.12
+        case 5: return base * 1.04
+        default: return base
+        }
+    }
+
+    private func resetAttributes(
+        range: NSRange,
+        mode: PresentationMode,
+        fontSize: CGFloat,
+        textView: NSTextView,
+        contentStorage: NSTextContentStorage,
+        layoutManager: NSTextLayoutManager
+    ) {
+        guard range.length > 0 else { return }
+        textView.font = mode == .rich
+            ? NSFont.systemFont(ofSize: fontSize)
+            : NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        setAttributes(
+            [.foregroundColor: NSColor.textColor],
+            range: range,
+            contentStorage: contentStorage,
+            layoutManager: layoutManager
+        )
     }
 
     private func clearForeground(
@@ -267,16 +353,16 @@ final class MarkdownSyntaxHighlighter {
         layoutManager: NSTextLayoutManager
     ) {
         guard range.length > 0 else { return }
-        setColor(
-            .textColor,
+        setAttributes(
+            [.foregroundColor: NSColor.textColor],
             range: range,
             contentStorage: contentStorage,
             layoutManager: layoutManager
         )
     }
 
-    private func setColor(
-        _ color: NSColor,
+    private func setAttributes(
+        _ attributes: [NSAttributedString.Key: Any],
         range: NSRange,
         contentStorage: NSTextContentStorage,
         layoutManager: NSTextLayoutManager
@@ -285,200 +371,8 @@ final class MarkdownSyntaxHighlighter {
               let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: range.location),
               let end = contentStorage.location(start, offsetBy: range.length),
               let textRange = NSTextRange(location: start, end: end) else { return }
-        layoutManager.setRenderingAttributes([.foregroundColor: color], for: textRange)
+        layoutManager.setRenderingAttributes(attributes, for: textRange)
         layoutManager.invalidateLayout(for: textRange)
-    }
-
-    // MARK: - Rich parsing and applying
-
-    private func rehighlightRich(_ text: String) {
-        richWork?.cancel()
-        richGeneration += 1
-        let parseGeneration = richGeneration
-        let snapshot = text
-        let work = DispatchWorkItem { [weak self] in
-            let runs = MarkdownPresentation.runs(in: snapshot)
-            DispatchQueue.main.async {
-                guard let self,
-                      parseGeneration == self.richGeneration,
-                      let textView = self.textView,
-                      textView.string == snapshot else { return }
-                self.applyRich(runs, to: textView, clearRenderings: false)
-            }
-        }
-        richWork = work
-        parseQueue.asyncAfter(deadline: .now() + debounceInterval, execute: work)
-    }
-
-    private func applyRichNow(to textView: NSTextView, clearRenderings: Bool) {
-        let runs = MarkdownPresentation.runs(in: textView.string)
-        applyRich(runs, to: textView, clearRenderings: clearRenderings)
-    }
-
-    private func applyRich(
-        _ runs: [MarkdownPresentation.Run],
-        to textView: NSTextView,
-        clearRenderings: Bool
-    ) {
-        guard let storage = textView.textStorage else { return }
-        resetStorage(to: richBaseAttributes, textView: textView, clearRenderings: clearRenderings)
-        renderedMode = .rich
-
-        let visible = visibleCharacterRange(in: textView)
-        let immediate = runs.filter { NSIntersectionRange($0.range, visible).length > 0 }
-        applyRichRuns(immediate, to: textView)
-
-        let passGeneration = richGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + fullPassDelay) { [weak self] in
-            guard let self, passGeneration == self.richGeneration else { return }
-            self.applyRichInChunks(
-                runs,
-                index: 0,
-                generation: passGeneration,
-                textView: textView
-            )
-        }
-    }
-
-    private func applyRichInChunks(
-        _ runs: [MarkdownPresentation.Run],
-        index: Int,
-        generation passGeneration: Int,
-        textView: NSTextView
-    ) {
-        guard passGeneration == richGeneration else { return }
-        let end = min(index + chunkSize, runs.count)
-        if index < end {
-            applyRichRuns(Array(runs[index..<end]), to: textView)
-        }
-        if end < runs.count {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.002) { [weak self] in
-                self?.applyRichInChunks(
-                    runs,
-                    index: end,
-                    generation: passGeneration,
-                    textView: textView
-                )
-            }
-        } else {
-            textView.needsDisplay = true
-        }
-    }
-
-    private func applyRichRuns(_ runs: [MarkdownPresentation.Run], to textView: NSTextView) {
-        guard let storage = textView.textStorage else { return }
-        let length = storage.length
-        let undoManager = textView.undoManager
-        undoManager?.disableUndoRegistration()
-        defer { undoManager?.enableUndoRegistration() }
-        storage.beginEditing()
-        for run in runs {
-            guard run.range.location >= 0,
-                  run.range.location + run.range.length <= length,
-                  run.range.length > 0 else { continue }
-            let attributes = richAttributes(for: run.style)
-            guard !attributes.isEmpty else { continue }
-            storage.addAttributes(attributes, range: run.range)
-        }
-        storage.endEditing()
-    }
-
-    private func resetStorage(
-        to attributes: [NSAttributedString.Key: Any],
-        textView: NSTextView,
-        clearRenderings: Bool
-    ) {
-        guard let storage = textView.textStorage else { return }
-        let full = NSRange(location: 0, length: storage.length)
-        let undoManager = textView.undoManager
-        undoManager?.disableUndoRegistration()
-        storage.beginEditing()
-        storage.setAttributes(attributes, range: full)
-        storage.endEditing()
-        undoManager?.enableUndoRegistration()
-        if clearRenderings,
-           let layoutManager = textView.textLayoutManager,
-           let contentStorage = layoutManager.textContentManager as? NSTextContentStorage,
-           full.length > 0,
-           let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: 0),
-           let end = contentStorage.location(start, offsetBy: full.length),
-           let range = NSTextRange(location: start, end: end) {
-            layoutManager.setRenderingAttributes([:], for: range)
-            layoutManager.invalidateLayout(for: range)
-        }
-    }
-
-    private var sourceBaseAttributes: [NSAttributedString.Key: Any] {
-        [
-            .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
-            .foregroundColor: NSColor.textColor
-        ]
-    }
-
-    private var richBaseAttributes: [NSAttributedString.Key: Any] {
-        [
-            .font: NSFont.systemFont(ofSize: fontSize),
-            .foregroundColor: NSColor.textColor
-        ]
-    }
-
-    private func richAttributes(for style: MarkdownPresentation.Style) -> [NSAttributedString.Key: Any] {
-        switch style {
-        case .body:
-            return [:]
-        case .hidden:
-            return [
-                .font: NSFont.systemFont(ofSize: 0.1),
-                .foregroundColor: NSColor.clear
-            ]
-        case .heading(let level):
-            let size = fontSize + CGFloat(max(0, 7 - level) * 2)
-            return [.font: NSFont.systemFont(ofSize: size, weight: .bold)]
-        case .strong:
-            return [.font: NSFont.systemFont(ofSize: fontSize, weight: .bold)]
-        case .emphasis:
-            return [.font: NSFontManager.shared.convert(
-                NSFont.systemFont(ofSize: fontSize),
-                toHaveTrait: .italicFontMask
-            )]
-        case .strikethrough:
-            return [.strikethroughStyle: NSUnderlineStyle.single.rawValue]
-        case .code:
-            return [
-                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
-                .backgroundColor: NSColor.labelColor.withAlphaComponent(0.08)
-            ]
-        case .link:
-            return [
-                .foregroundColor: NSColor.linkColor,
-                .underlineStyle: NSUnderlineStyle.single.rawValue
-            ]
-        case .image:
-            return [
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .font: NSFontManager.shared.convert(
-                    NSFont.systemFont(ofSize: fontSize),
-                    toHaveTrait: .italicFontMask
-                )
-            ]
-        case .blockQuote:
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.headIndent = 14
-            paragraph.firstLineHeadIndent = 14
-            return [
-                .foregroundColor: NSColor.secondaryLabelColor,
-                .paragraphStyle: paragraph
-            ]
-        case .listMarker, .taskMarker:
-            return [.foregroundColor: NSColor.secondaryLabelColor]
-        case .tableHeader:
-            return [.font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)]
-        case .codeBlock:
-            return [
-                .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
-                .backgroundColor: NSColor.labelColor.withAlphaComponent(0.08)
-            ]
-        }
     }
 
     private func visibleCharacterRange(in textView: NSTextView) -> NSRange {
@@ -493,9 +387,5 @@ final class MarkdownSyntaxHighlighter {
         let end = min(length, max(top, bottom) + 200)
         guard end > start else { return NSRange(location: 0, length: 0) }
         return NSRange(location: start, length: end - start)
-    }
-
-    private func color(for kind: MarkdownSyntaxSpan.Kind) -> NSColor {
-        MarkdownSyntaxPalette.color(for: kind)
     }
 }
