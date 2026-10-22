@@ -22,6 +22,7 @@ struct MarkdownNotepadApp: App {
         }
         .commands {
             DocumentCommands()
+            MarkdownFormattingCommands()
         }
     }
 }

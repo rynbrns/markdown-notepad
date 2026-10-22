@@ -437,6 +437,10 @@ final class DocumentSession: ObservableObject, Identifiable {
         find.textDidChange()
     }
 
+    func applyFormatting(_ action: MarkdownFormattingAction) {
+        textViewController?.apply(action)
+    }
+
     func attach(window: NSWindow) {
         self.window = window
         window.tabbingMode = .preferred

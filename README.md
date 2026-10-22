@@ -64,6 +64,31 @@ default, regex toggle, replace-all, match highlighting) are available.
 - **Appearance:** semantic AppKit colours throughout, so light/dark mode follows
   the system; UI tests force dark mode and capture a screenshot.
 
+## Markdown formatting shortcuts
+
+The **Editor** menu exposes every formatting command with its shortcut glyph.
+Commands work on the current selection, or on the current line when there is no
+selection, and a multi-line selection is transformed line by line. Each command
+is one undoable edit, so ⌘Z restores the previous text exactly.
+
+| Action | Shortcut | Behaviour |
+| --- | --- | --- |
+| Bold | ⌘B | Toggles `**` around the selection or inserts a pair at the caret |
+| Italic | ⌘I | Toggles `*`; applying it to bold text produces `***` |
+| Strikethrough | ⇧⌘X | Toggles `~~` |
+| Inline code | ⌘\` | Toggles a backtick span |
+| Code block | ⌥⌘C | Wraps the selected lines in a fenced block, or removes the surrounding fences |
+| Heading 1–6 | ⌘1 … ⌘6 | Sets the level on every selected non-blank line; pressing the same level again removes the heading |
+| Unordered list | ⇧⌘8 | Toggles `- ` on the selected non-blank lines |
+| Ordered list | ⇧⌘7 | Numbers the selected lines from 1, or continues the preceding list number |
+| Increase list indent | ⌘] | Adds two leading spaces to selected list items |
+| Decrease list indent | ⌘[ | Removes up to two leading spaces from selected list items |
+| Blockquote | ⌥⌘Q | Toggles `> ` on the selected non-blank lines |
+| Insert link | ⌘K | Wraps the selection as `[text](url)` and selects the `url` placeholder; if the pasteboard holds an http/https/mailto URL, that destination is used |
+
+Inside a list, **Tab** and **Shift-Tab** also increase and decrease nesting by two
+spaces; everywhere else they keep the standard text-view behaviour.
+
 ## File-format guarantees (M1)
 
 - **Read** decodes UTF-8, records a BOM if present, and normalizes CRLF/CR to LF
