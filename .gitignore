@@ -7,3 +7,6 @@ app/.derivedData/
 DerivedData/
 *.dmg
 *.zip
+
+app/TestResults.xcresult/
+app/xcodebuild-test.log

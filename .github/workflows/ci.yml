@@ -35,7 +35,7 @@ jobs:
   macos-app:
     name: macOS / MarkdownNotepad
     runs-on: macos-14
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -72,3 +72,33 @@ jobs:
             -derivedDataPath app/.derivedData \
             CODE_SIGNING_ALLOWED=NO \
             build
+
+      - name: Run XCUITest smoke and screenshot suite
+        env:
+          SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+        run: |
+          set -o pipefail
+          mkdir -p "$SCREENSHOT_DIR"
+          rm -rf app/TestResults.xcresult
+          xcodebuild test \
+            -project app/MarkdownNotepad.xcodeproj \
+            -scheme MarkdownNotepad \
+            -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath app/.derivedData \
+            -resultBundlePath app/TestResults.xcresult \
+            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee app/xcodebuild-test.log
+
+      - name: Upload UI test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ui-test-artifacts
+          path: |
+            ${{ runner.temp }}/screenshots
+            app/TestResults.xcresult
+            app/xcodebuild-test.log
+          if-no-files-found: warn

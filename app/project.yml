@@ -44,13 +44,32 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         SWIFT_EMIT_LOC_STRINGS: YES
 
+  MarkdownNotepadUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: MarkdownNotepadUITests
+    dependencies:
+      - target: MarkdownNotepad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rynbrns.MarkdownNotepadUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: MarkdownNotepad
+        SWIFT_VERSION: "5.9"
+
 schemes:
   MarkdownNotepad:
     build:
       targets:
         MarkdownNotepad: all
+        MarkdownNotepadUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - MarkdownNotepadUITests
     profile:
       config: Release
     analyze:
