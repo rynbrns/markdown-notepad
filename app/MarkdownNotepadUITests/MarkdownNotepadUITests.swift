@@ -98,7 +98,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         let editor = newWindowAndFocusEditor(app)
         editor.typeText("# Dark mode\n\nSemantic colours follow the system appearance.")
         capture(app.windows.firstMatch, name: "09-dark-mode")
-        app.typeKey("p", modifierFlags: [.command, .shift])
+        app.typeKey("2", modifierFlags: [.command, .control])
         let darkMarker = app.staticTexts["previewVisible"]
         XCTAssertTrue(darkMarker.waitForExistence(timeout: 10), "⇧⌘P should reveal the dark preview")
         let darkPreview = app.webViews.firstMatch
@@ -131,9 +131,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         > A quote.
         """)
 
-        app.typeKey("p", modifierFlags: [.command, .shift])
+        app.typeKey("2", modifierFlags: [.command, .control])
         let marker = app.staticTexts["previewVisible"]
-        XCTAssertTrue(marker.waitForExistence(timeout: 10), "⇧⌘P should open the preview pane")
+        XCTAssertTrue(marker.waitForExistence(timeout: 10), "Panels mode should show the preview pane")
         let preview = app.webViews.firstMatch
         XCTAssertTrue(preview.waitForExistence(timeout: 10), "The preview pane should host a web view")
         XCTAssertTrue(preview.staticTexts["Preview title"].waitForExistence(timeout: 10),
@@ -457,9 +457,9 @@ final class MarkdownNotepadUITests: XCTestCase {
                       "The find counter should be readable")
         app.typeKey(.escape, modifierFlags: [])
 
-        app.typeKey("p", modifierFlags: [.command, .shift])
+        app.typeKey("2", modifierFlags: [.command, .control])
         let preview = app.webViews.firstMatch
-        XCTAssertTrue(preview.waitForExistence(timeout: 10))
+        XCTAssertTrue(preview.waitForExistence(timeout: 10), "Panels mode should show the preview")
         XCTAssertEqual(preview.label, "Rendered Markdown preview", "The preview needs a VoiceOver label")
         capture(app.windows.firstMatch, name: "17-accessibility-preview")
 
