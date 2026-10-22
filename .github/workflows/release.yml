@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (for example 0.1.0)'
+        required: true
+        default: '0.1.0'
+      publish_release:
+        description: 'Create or update the GitHub Release'
+        type: boolean
+        default: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and verify universal installer
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      APP_NAME: Markdown Notepad
+      BUNDLE_ID: com.ryanpaperclip.markdownnotepad
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Normalize version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: version must look like 1.2.3 (got '$version')" >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            echo "TAG=$GITHUB_REF_NAME" >> "$GITHUB_ENV"
+          else
+            echo "TAG=v$version" >> "$GITHUB_ENV"
+          fi
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          sw_vers
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run core tests (release gate)
+        run: swift test
+
+      - name: Build, sign, and package .dmg
+        run: ./scripts/build-release.sh
+
+      - name: Verify .dmg mounts, copies, signs, and launches
+        run: ./scripts/verify-release.sh
+
+      - name: Confirm no notarization secrets were used
+        if: env.APPLE_ID == ''
+        run: |
+          echo "Shipped the free ad-hoc-signed path. No Apple Developer credentials were supplied."
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Markdown-Notepad-${{ env.VERSION }}-arm64
+          path: |
+            build/Markdown-Notepad-${{ env.VERSION }}-arm64.dmg
+            build/Markdown-Notepad-${{ env.VERSION }}-arm64.dmg.sha256
+            build/codesign-app.txt
+            build/codesign-copy.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub Release asset
+        if: github.event_name == 'push' || inputs.publish_release
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="build/Markdown-Notepad-${VERSION}-arm64.dmg"
+          sha="${dmg}.sha256"
+          notes="build/release-notes.md"
+          cat > "$notes" <<EOF
+          Markdown Notepad ${VERSION} for Apple Silicon (arm64), macOS 14 or later.
+
+          - Installer: \`$(basename "$dmg")\`
+          - SHA-256: \`$(cut -d' ' -f1 "$sha")\`
+          - Signing: ad-hoc unless the workflow ran with Apple Developer credentials.
+
+          Install: open the .dmg, drag **Markdown Notepad** to **Applications**, then
+          right-click the app and choose **Open** on first launch.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$dmg" "$sha" --clobber
+          else
+            gh release create "$TAG" "$dmg" "$sha" \
+              --title "Markdown Notepad $VERSION" \
+              --notes-file "$notes" \
+              --target "$GITHUB_SHA"
+          fi
+          echo "Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/$TAG"

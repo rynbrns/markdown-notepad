@@ -1,6 +1,6 @@
 name: MarkdownNotepad
 options:
-  bundleIdPrefix: com.rynbrns
+  bundleIdPrefix: com.ryanpaperclip
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "15.4"
@@ -33,7 +33,7 @@ targets:
         product: MarkdownCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rynbrns.MarkdownNotepad
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanpaperclip.markdownnotepad
         PRODUCT_NAME: MarkdownNotepad
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
@@ -53,7 +53,7 @@ targets:
       - target: MarkdownNotepad
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.rynbrns.MarkdownNotepadUITests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ryanpaperclip.markdownnotepad.uitests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: MarkdownNotepad
         SWIFT_VERSION: "5.9"

@@ -1,9 +1,10 @@
 # Markdown Notepad
 
 A native macOS markdown notepad (macOS 14+, Apple Silicon). This repository is at
-**M2**: the file layer is trustworthy and the app now ships the native shell —
+**M2 + M4**: the file layer is trustworthy, the app ships the native shell —
 multi-window and tabs, a full menu bar, unsaved-changes prompts, recents,
-find/replace, dark mode, and session restoration.
+find/replace, dark mode, and session restoration — and CI produces an
+installable ad-hoc-signed Apple Silicon `.dmg`.
 
 ## Architecture
 
@@ -105,8 +106,32 @@ If Swift is not installed, download the Linux toolchain from
 | --- | --- | --- |
 | `linux-core` | `ubuntu-latest` in the `swift:6.2` container | `swift test` passes and `MarkdownCore` has no UI imports |
 | `macos-app` | `macos-14` | `swift test` passes on Darwin file paths, XcodeGen regenerates the project, `xcodebuild build` succeeds for arm64, and the XCUITest smoke + screenshot suite passes |
+| `release` (`.github/workflows/release.yml`) | `macos-14` | archives a Release arm64 build, ad-hoc signs it, mounts the `.dmg`, copies the app out, verifies the signature, launches the app, and publishes the `.dmg` |
 
-Both jobs run on every pull request and on pushes to `main`.
+Both CI jobs run on every pull request and on pushes to `main`. The release workflow runs on a `v*` tag or manually, and uploads the `.dmg` as a workflow artifact plus a GitHub Release asset.
+
+## Install (Apple Silicon, macOS 14+)
+
+1. Download `Markdown-Notepad-<version>-arm64.dmg` from the issue or the GitHub Release.
+2. Open the `.dmg`, drag **Markdown Notepad** to **Applications**, and eject the disk image.
+3. Right-click **Markdown Notepad** in Applications and choose **Open** the first time.
+
+The build is ad-hoc signed, so macOS may warn that the app is from an unidentified developer. If it reports the app is damaged, run this once in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Markdown Notepad.app"
+```
+
+## Building and verifying a release locally
+
+Requires macOS 14+, Xcode 15.4+, and `brew install xcodegen`.
+
+```bash
+VERSION=0.1.0 ./scripts/build-release.sh
+VERSION=0.1.0 ./scripts/verify-release.sh
+```
+
+`build-release.sh` writes `build/Markdown-Notepad-0.1.0-arm64.dmg` and its SHA-256. `verify-release.sh` mounts the image, copies the app out, checks the signature, and launches it. Set `SKIP_LAUNCH=1` on a machine without a GUI session.
 
 ## Status / limitations
 
