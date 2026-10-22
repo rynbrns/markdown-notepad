@@ -274,12 +274,8 @@ final class MarkdownNotepadUITests: XCTestCase {
         } catch {
             return XCTFail("Could not force quit the app: \(error)")
         }
-        let stopped = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "state == %d", XCUIApplication.State.notRunning.rawValue),
-            object: app
-        )
-        XCTAssertEqual(XCTWaiter().wait(for: [stopped], timeout: 15), .completed,
-                       "Force quit should terminate the app")
+        XCTAssertTrue(app.wait(for: .notRunning, timeout: 15),
+                      "Force quit should terminate the app")
 
         let relaunched = launchApp(supportDirectory: support)
         let restoredEditor = relaunched.textViews["editor"].firstMatch
