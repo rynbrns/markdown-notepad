@@ -54,8 +54,10 @@ final class WorkspaceStoresTests: XCTestCase {
 
     func testSessionRestorationRoundTripKeepsOrderAndDeduplicates() throws {
         let store = SessionRestorationStore(fileURL: tempDirectory.appendingPathComponent("Open.json"))
-        let one = URL(fileURLWithPath: "/tmp/one.md")
-        let two = URL(fileURLWithPath: "/tmp/two.md")
+        let one = tempDirectory.appendingPathComponent("one.md")
+        let two = tempDirectory.appendingPathComponent("two.md")
+        try Data("one".utf8).write(to: one)
+        try Data("two".utf8).write(to: two)
         try store.save([one, two, one])
 
         XCTAssertEqual(store.load().map(\.lastPathComponent), ["one.md", "two.md"])
