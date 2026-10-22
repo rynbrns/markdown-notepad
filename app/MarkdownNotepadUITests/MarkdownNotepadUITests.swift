@@ -208,10 +208,13 @@ final class MarkdownNotepadUITests: XCTestCase {
         captureScreen(name: "12-title-bar-rename")
         app.typeKey(.return, modifierFlags: [])
 
-        let statusName = app.staticTexts.matching(identifier: "documentName").firstMatch
-        XCTAssertTrue(statusName.waitForExistence(timeout: 5))
-        XCTAssertEqual(statusName.label, "Renamed.md",
-                       "Committing the rename should update the document title")
+        let window = app.windows.firstMatch
+        let renamed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "title CONTAINS %@", "Renamed"),
+            object: window
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [renamed], timeout: 5), .completed,
+                       "Committing the rename should update the window title")
 
         let titleBarAgain = app.descendants(matching: .any)
             .matching(identifier: "titleBarNameField").firstMatch
@@ -222,8 +225,10 @@ final class MarkdownNotepadUITests: XCTestCase {
         secondEdit.typeText("Never committed")
         app.typeKey(.escape, modifierFlags: [])
 
-        XCTAssertEqual(app.staticTexts.matching(identifier: "documentName").firstMatch.label, "Renamed.md",
-                       "Escape should discard the in-progress rename")
+        XCTAssertTrue(window.title.contains("Renamed"),
+                      "Escape should discard the in-progress rename")
+        XCTAssertFalse(window.title.contains("Never committed"),
+                       "Escape must not commit the edited name")
 
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
