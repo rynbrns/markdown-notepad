@@ -35,12 +35,15 @@ jobs:
   macos-app:
     name: macOS / MarkdownNotepad
     runs-on: macos-14
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - name: Show Xcode version
         run: xcodebuild -version
+
+      - name: Run core tests on macOS (Darwin file paths)
+        run: swift test
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -51,6 +54,7 @@ jobs:
           path: |
             ~/Library/Caches/org.swift.swiftpm
             app/.derivedData
+            .build
           key: ${{ runner.os }}-xcode-${{ hashFiles('Package.swift', 'Package.resolved', 'app/project.yml') }}
           restore-keys: |
             ${{ runner.os }}-xcode-
