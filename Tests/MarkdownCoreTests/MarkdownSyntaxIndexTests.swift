@@ -126,7 +126,7 @@ final class MarkdownSyntaxIndexTests: XCTestCase {
 
     // MARK: - Robustness
 
-    private func measure(_ body: () -> Void) -> Double {
+    private func measureMilliseconds(_ body: () -> Void) -> Double {
         let start = DispatchTime.now().uptimeNanoseconds
         body()
         return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
@@ -142,7 +142,7 @@ final class MarkdownSyntaxIndexTests: XCTestCase {
             String(repeating: "- [", count: 100_000)
         ]
         for malformed in cases {
-            let elapsed = measure {
+            let elapsed = measureMilliseconds {
                 _ = MarkdownSyntax.spans(in: malformed)
             }
             print(String(format: "malformed scan: %d bytes in %.1f ms", malformed.utf8.count, elapsed))
@@ -156,7 +156,7 @@ final class MarkdownSyntaxIndexTests: XCTestCase {
         let table = "| Name | Value |\n| --- | --- |\n" + tableRows
 
         for document in [nested, table] {
-            let elapsed = measure {
+            let elapsed = measureMilliseconds {
                 let spans = MarkdownSyntax.spans(in: document)
                 XCTAssertFalse(spans.isEmpty)
             }
@@ -210,7 +210,7 @@ final class MarkdownSyntaxIndexTests: XCTestCase {
             var edited = text
             let hint = (edited as NSString).length
             var worstUpdate = 0.0
-            var editStart = DispatchTime.now().uptimeNanoseconds
+            let editStart = DispatchTime.now().uptimeNanoseconds
             for iteration in 0..<25 {
                 edited += "x"
                 _ = index.update(text: edited, changedOffsetHint: hint + iteration)
