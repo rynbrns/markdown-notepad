@@ -123,6 +123,8 @@ struct ContentView: View {
             Text(session.formatLabel)
             Text("·")
             Text(session.modeLabel)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(session.modeLabel)
                 .accessibilityIdentifier("activeMode")
             if session.isPreviewVisible {
                 Text("·")
@@ -142,7 +144,6 @@ struct ContentView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .accessibilityIdentifier("documentName")
-                .accessibilityLabel("Document \(session.displayName)")
         }
         .font(.caption)
         .foregroundStyle(.secondary)

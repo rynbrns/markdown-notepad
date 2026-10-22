@@ -74,10 +74,13 @@ struct MarkdownPreviewView: NSViewRepresentable {
             debounce?.cancel()
             generation += 1
             let renderGeneration = generation
-            let name = baseURL?.lastPathComponent ?? "Preview"
+            let name = baseURL?.lastPathComponent ?? "Untitled"
             let work = DispatchWorkItem { [weak self] in
                 guard let self else { return }
-                let html = MarkdownPreviewRenderer.documentHTML(markdown: text, title: name)
+                let html = MarkdownPreviewRenderer.documentHTML(
+                    markdown: text,
+                    title: "\(name) — Rendered Markdown preview"
+                )
                 DispatchQueue.main.async {
                     guard renderGeneration == self.generation, let webView = self.webView else { return }
                     webView.loadHTMLString(html, baseURL: baseURL)

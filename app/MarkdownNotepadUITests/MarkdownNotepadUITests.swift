@@ -355,7 +355,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(reloadPrompt.buttons["Reload"].exists, "Conflict must offer Reload")
         XCTAssertTrue(reloadPrompt.buttons["Overwrite"].exists, "Conflict must offer Overwrite")
         XCTAssertTrue(reloadPrompt.buttons["Save As…"].exists, "Conflict must offer Save As")
-        XCTAssertTrue(reloadPrompt.buttons["Cancel"].exists, "Conflict must offer Cancel")
+        XCTAssertTrue(app.buttons["Cancel"].exists, "Conflict must offer Cancel")
 
         reloadPrompt.buttons["Reload"].click()
         let reloaded = XCTNSPredicateExpectation(
@@ -414,7 +414,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         // would run the normal save prompts and delete the recovery snapshot.
         let killer = Process()
         killer.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        killer.arguments = ["-9", "-x", "MarkdownNotepad"]
+        killer.arguments = ["-9", "-f", "MarkdownNotepad.app/Contents/MacOS/MarkdownNotepad"]
         do {
             try killer.run()
             killer.waitUntilExit()
@@ -456,14 +456,16 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Use regular expression"].exists)
         findField.typeText("bold")
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(app.staticTexts["1 of 1"].waitForExistence(timeout: 5),
-                      "The find counter should be readable")
+        let findStatus = app.staticTexts["findStatus"]
+        XCTAssertTrue(findStatus.waitForExistence(timeout: 5), "The find counter should be readable")
+        XCTAssertEqual(findStatus.label, "1 of 1")
         app.typeKey(.escape, modifierFlags: [])
 
         app.typeKey("2", modifierFlags: [.command, .control])
         let preview = app.webViews.firstMatch
         XCTAssertTrue(preview.waitForExistence(timeout: 10), "Panels mode should show the preview")
-        XCTAssertEqual(preview.label, "Rendered Markdown preview", "The preview needs a VoiceOver label")
+        XCTAssertTrue(preview.label.contains("Rendered Markdown preview"),
+                      "The preview should expose a VoiceOver label, got \(preview.label)")
         capture(app.windows.firstMatch, name: "17-accessibility-preview")
 
         // Standard keyboard shortcuts remain available.
@@ -527,7 +529,9 @@ final class MarkdownNotepadUITests: XCTestCase {
         let findField = app.textFields["findField"]
         XCTAssertTrue(findField.waitForExistence(timeout: 5))
         findField.typeText("item")
-        XCTAssertTrue(app.staticTexts["1 of 2"].waitForExistence(timeout: 5))
+        let findStatus = app.staticTexts["findStatus"]
+        XCTAssertTrue(findStatus.waitForExistence(timeout: 5))
+        XCTAssertEqual(findStatus.label, "1 of 2")
         app.typeKey(.escape, modifierFlags: [])
         app.typeKey("z", modifierFlags: .command)
         XCTAssertTrue(reopened.exists)

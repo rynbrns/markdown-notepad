@@ -23,7 +23,6 @@ struct MarkdownNotepadApp: App {
         }
         .commands {
             DocumentCommands()
-            MarkdownFormattingCommands()
         }
     }
 }
@@ -229,6 +228,95 @@ struct DocumentCommands: Commands {
             Button("Markdown Notepad Help") {
                 workspace.showHelp()
             }
+        }
+
+        formattingCommands
+    }
+
+    @CommandsBuilder
+    private var formattingCommands: some Commands {
+        CommandMenu("Editor") {
+            Button("Bold") {
+                session?.applyFormatting(.bold)
+            }
+            .keyboardShortcut("b")
+            .disabled(session == nil)
+
+            Button("Italic") {
+                session?.applyFormatting(.italic)
+            }
+            .keyboardShortcut("i")
+            .disabled(session == nil)
+
+            Button("Strikethrough") {
+                session?.applyFormatting(.strikethrough)
+            }
+            .keyboardShortcut("x", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
+            Button("Inline Code") {
+                session?.applyFormatting(.inlineCode)
+            }
+            .keyboardShortcut("`")
+            .disabled(session == nil)
+
+            Button("Code Block") {
+                session?.applyFormatting(.codeBlock)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(session == nil)
+
+            Divider()
+
+            Menu("Heading") {
+                ForEach(1...6, id: \.self) { level in
+                    Button("Heading \(level)") {
+                        session?.applyFormatting(.heading(level))
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(level)")), modifiers: .command)
+                    .disabled(session == nil)
+                }
+            }
+
+            Divider()
+
+            Button("Unordered List") {
+                session?.applyFormatting(.unorderedList)
+            }
+            .keyboardShortcut("8", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
+            Button("Ordered List") {
+                session?.applyFormatting(.orderedList)
+            }
+            .keyboardShortcut("7", modifiers: [.command, .shift])
+            .disabled(session == nil)
+
+            Button("Increase List Indent") {
+                session?.applyFormatting(.indentList)
+            }
+            .keyboardShortcut("]", modifiers: .command)
+            .disabled(session == nil)
+
+            Button("Decrease List Indent") {
+                session?.applyFormatting(.outdentList)
+            }
+            .keyboardShortcut("[", modifiers: .command)
+            .disabled(session == nil)
+
+            Button("Blockquote") {
+                session?.applyFormatting(.blockquote)
+            }
+            .keyboardShortcut("q", modifiers: [.command, .option])
+            .disabled(session == nil)
+
+            Divider()
+
+            Button("Insert Link") {
+                session?.applyFormatting(.link)
+            }
+            .keyboardShortcut("k")
+            .disabled(session == nil)
         }
     }
 
