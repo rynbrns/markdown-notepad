@@ -61,6 +61,17 @@ struct DocumentCommands: Commands {
                     }
                 }
             }
+
+            Divider()
+
+            Button("Close") {
+                if let session {
+                    session.requestClose()
+                } else {
+                    NSApp.keyWindow?.performClose(nil)
+                }
+            }
+            .keyboardShortcut("w")
         }
 
         CommandGroup(replacing: .saveItem) {
@@ -180,6 +191,9 @@ struct DocumentCommands: Commands {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = true
+        if ProcessInfo.processInfo.environment["MARKDOWN_NOTEPAD_FORCE_DARK"] == "1" {
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

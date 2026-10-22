@@ -12,7 +12,7 @@ struct DocumentWindowView: View {
     }
 
     var body: some View {
-        ContentView(session: session)
+        ContentView(session: session, find: session.find)
             .frame(minWidth: 640, minHeight: 420)
             .focusedSceneValue(\.documentSession, session)
             .background(
@@ -34,6 +34,7 @@ struct DocumentWindowView: View {
 
 struct ContentView: View {
     @ObservedObject var session: DocumentSession
+    @ObservedObject var find: FindController
 
     private var document: MarkdownDocument {
         MarkdownDocument(text: session.text)
@@ -46,8 +47,8 @@ struct ContentView: View {
                 Divider()
             }
 
-            if session.find.isVisible {
-                FindBarView(session: session, controller: session.find)
+            if find.isVisible {
+                FindBarView(session: session, controller: find)
                 Divider()
             }
 

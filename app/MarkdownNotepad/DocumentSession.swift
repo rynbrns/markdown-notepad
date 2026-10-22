@@ -265,6 +265,12 @@ final class DocumentSession: ObservableObject, Identifiable {
 
     // MARK: - Close / quit
 
+    /// Closes this window (or tab) after the unsaved-changes prompt.
+    func requestClose() {
+        guard confirmClose() else { return }
+        window?.close()
+    }
+
     /// Prompts when needed; returns true when the window may close.
     func confirmClose() -> Bool {
         let canClose = confirmDiscardIfNeeded()

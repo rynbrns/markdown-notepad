@@ -70,10 +70,17 @@ final class MarkdownNotepadUITests: XCTestCase {
         capture(app.windows.firstMatch, name: "06-replace-all")
         XCTAssertTrue((editor.value as? String)?.contains("Found me here. Found me again.") == true)
 
-        // Tabs: a second window should merge into the first as a tab
+        // Tabs: merge the second window into the first as a tab
         app.typeKey("n", modifierFlags: .command)
         let secondEditor = app.textViews["editor"].firstMatch
         XCTAssertTrue(secondEditor.waitForExistence(timeout: 5))
+        app.menuBars.menuBarItems["Window"].click()
+        let merge = app.menuBars.menuItems["Merge All Windows"]
+        if merge.waitForExistence(timeout: 3) {
+            merge.click()
+        } else {
+            app.typeKey(.escape, modifierFlags: [])
+        }
         capture(app.windows.firstMatch, name: "07-tabs")
 
         // Unsaved prompt from the second tab
@@ -106,7 +113,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.launchEnvironment["MARKDOWN_NOTEPAD_UI_TESTING"] = "1"
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
         if dark {
-            app.launchArguments += ["-AppleInterfaceStyle", "Dark"]
+            app.launchEnvironment["MARKDOWN_NOTEPAD_FORCE_DARK"] = "1"
         }
         app.launch()
         return app
