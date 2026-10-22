@@ -110,7 +110,18 @@ public enum MarkdownPreviewRenderer {
             case nil:
                 break
             }
-            return "<li>\(checkbox)\(renderChildren(item))</li>\n"
+            if item.checkbox != nil {
+                // GFM task items are parsed as loose list items, so unwrap the
+                // paragraph to keep the checkbox inline with its label.
+                let content = item.children.map { child -> String in
+                    if let paragraph = child as? Paragraph {
+                        return renderChildren(paragraph)
+                    }
+                    return render(child)
+                }.joined()
+                return "<li class=\"task-item\">\(checkbox)\(content)</li>\n"
+            }
+            return "<li>\(renderChildren(item))</li>\n"
 
         case let table as Table:
             return renderTable(table)

@@ -102,6 +102,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(darkMarker.waitForExistence(timeout: 10), "⇧⌘P should reveal the dark preview")
         let darkPreview = app.webViews.firstMatch
         XCTAssertTrue(darkPreview.waitForExistence(timeout: 10), "The dark preview should host a web view")
+        sleep(2)
         capture(app.windows.firstMatch, name: "11-preview-dark")
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
@@ -134,6 +135,8 @@ final class MarkdownNotepadUITests: XCTestCase {
         XCTAssertTrue(marker.waitForExistence(timeout: 10), "⇧⌘P should open the preview pane")
         let preview = app.webViews.firstMatch
         XCTAssertTrue(preview.waitForExistence(timeout: 10), "The preview pane should host a web view")
+        XCTAssertTrue(preview.staticTexts["Preview title"].waitForExistence(timeout: 10),
+                      "The preview should render the heading text")
         capture(app.windows.firstMatch, name: "10-preview-light")
 
         app.typeKey("p", modifierFlags: [.command, .shift])

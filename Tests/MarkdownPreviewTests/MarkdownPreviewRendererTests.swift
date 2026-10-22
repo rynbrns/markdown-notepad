@@ -28,8 +28,8 @@ final class MarkdownPreviewRendererTests: XCTestCase {
 
         XCTAssertTrue(html.contains("<ul>"), "Unordered list should render")
         XCTAssertTrue(html.contains("<ol>"), "Ordered list should render")
-        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled> <p>Open task</p>"), "Unchecked task should render")
-        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked> <p>Done task</p>"), "Checked task should render")
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled> Open task</li>"), "Unchecked task should render inline")
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked> Done task</li>"), "Checked task should render inline")
 
         XCTAssertTrue(html.contains("<pre><code class=\"language-swift\">"), "Fenced code should keep its language")
         XCTAssertTrue(html.contains("let greeting = &quot;hello &lt;world&gt;&quot;"), "Code text should be escaped")
