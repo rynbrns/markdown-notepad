@@ -294,6 +294,8 @@ final class MarkdownNotepadUITests: XCTestCase {
         editor.typeText("# Title\n\nA **bold** line and [a link](https://example.com).")
         let source = editor.value as? String
 
+        print("STATIC TEXTS:", app.staticTexts.allElementsBoundByIndex.map(\.label).joined(separator: " | "))
+        print("BUTTONS:", app.buttons.allElementsBoundByIndex.map { "\($0.identifier):\($0.label)" }.joined(separator: " | "))
         XCTAssertTrue(waitForMode(app, "Plain Text"),
                       "An unset preference should start in Plain Text")
 

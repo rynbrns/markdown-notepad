@@ -125,13 +125,13 @@ struct ContentView: View {
             Text(session.formatLabel)
             Text("·")
             Text(session.modeLabel)
+            EditorModeSwitcher(session: session)
             if session.isPreviewVisible {
                 Text("·")
                 Text("Preview")
                     .accessibilityIdentifier("previewVisible")
             }
             Spacer()
-            EditorModeSwitcher(session: session)
             if session.isDirty {
                 Text("Edited")
                     .foregroundStyle(.orange)
