@@ -93,11 +93,12 @@ jobs:
             -destination 'platform=macOS,arch=arm64' \
             -derivedDataPath app/.derivedData \
             -resultBundlePath /tmp/icon-evidence.xcresult \
-            -only-testing:MarkdownNotepadUITests/MarkdownNotepadUITests/test05AppIconInDockAndFinder \
+            -only-testing:MarkdownNotepadUITests/MarkdownNotepadUITests/test08AppIconInDockAndFinder \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee /tmp/icon-evidence.log
+          grep -q "test08AppIconInDockAndFinder.*passed" /tmp/icon-evidence.log
 
       - name: Verify Markdown document registration
         env:

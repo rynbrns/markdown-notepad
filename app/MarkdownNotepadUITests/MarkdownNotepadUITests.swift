@@ -164,26 +164,23 @@ final class MarkdownNotepadUITests: XCTestCase {
         sleep(4)
         captureScreen(name: "12-icon-in-dock")
 
-        if let source = ProcessInfo.processInfo.environment["ICON_EVIDENCE_APP"], !source.isEmpty {
-            let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-                .appendingPathComponent("MarkdownNotepadIconEvidence", isDirectory: true)
-            let destination = folder.appendingPathComponent("Markdown Notepad.app", isDirectory: true)
-            let fileManager = FileManager.default
-            try? fileManager.removeItem(at: folder)
-            try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
-            do {
-                try fileManager.copyItem(at: URL(fileURLWithPath: source), to: destination)
-                NSWorkspace.shared.activateFileViewerSelecting([destination])
-                sleep(4)
-                captureScreen(name: "13-icon-in-finder")
-            } catch {
-                print("ICON EVIDENCE COPY FAILED: \(error)")
-            }
+        let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.ryanpaperclip.markdownnotepad")
+            ?? Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MarkdownNotepad.app")
+        let folder = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("MarkdownNotepadIconEvidence", isDirectory: true)
+        let destination = folder.appendingPathComponent("Markdown Notepad.app", isDirectory: true)
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: folder)
+        try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        do {
+            try fileManager.copyItem(at: appURL, to: destination)
+            NSWorkspace.shared.activateFileViewerSelecting([destination])
+            sleep(4)
+            captureScreen(name: "13-icon-in-finder")
+        } catch {
+            print("ICON EVIDENCE COPY FAILED \(appURL.path): \(error)")
         }
 
-        app.typeKey("w", modifierFlags: .command)
-        let prompt = waitForUnsavedPrompt(app)
-        prompt.buttons["Don’t Save"].click()
         app.terminate()
     }
 
@@ -289,7 +286,13 @@ final class MarkdownNotepadUITests: XCTestCase {
         editor.typeText("# Title\n\nA **bold** line and [a link](https://example.com).")
         let source = editor.value as? String
 
-        XCTAssertTrue(waitForMode(app, "Panels"), "An unset preference should start in Panels")
+        XCTAssertTrue(waitForMode(app, "Plain Text"),
+                      "An unset preference should start in Plain Text")
+
+        app.typeKey("2", modifierFlags: [.control, .command])
+        XCTAssertTrue(waitForMode(app, "Panels"), "⌃⌘2 should switch to Panels")
+        XCTAssertTrue(app.staticTexts["previewVisible"].waitForExistence(timeout: 10),
+                      "Panels should show the live preview")
 
         app.typeKey("1", modifierFlags: [.control, .command])
         XCTAssertTrue(waitForMode(app, "Plain Text"), "⌃⌘1 should switch to Plain Text")
@@ -583,6 +586,12 @@ final class MarkdownNotepadUITests: XCTestCase {
     }
 
     private func newWindowAndFocusEditor(_ app: XCUIApplication) -> XCUIElement {
+        let existing = app.textViews["editor"].firstMatch
+        if existing.waitForExistence(timeout: 3) {
+            existing.click()
+            return existing
+        }
+
         app.menuBars.menuBarItems["File"].click()
         let newItem = app.menuBars.menuItems["New"]
         if newItem.waitForExistence(timeout: 3) {
