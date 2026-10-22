@@ -362,8 +362,7 @@ final class MarkdownNotepadUITests: XCTestCase {
         app.menuBars.menuBarItems["File"].click()
         let recent = app.menuBars.menuItems["Open Recent"].firstMatch
         XCTAssertTrue(recent.waitForExistence(timeout: 5))
-        recent.hover()
-        sleep(1)
+        recent.click()
         let entry = app.menuBars.menuItems[file.lastPathComponent].firstMatch
         if entry.waitForExistence(timeout: 5) {
             entry.click()

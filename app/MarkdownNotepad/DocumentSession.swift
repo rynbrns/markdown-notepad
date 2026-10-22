@@ -242,9 +242,7 @@ final class DocumentSession: ObservableObject, Identifiable {
     private func presentReadOnlySaveAs(url: URL) {
         let alert = NSAlert()
         alert.messageText = "“\(url.lastPathComponent)” can’t be saved here."
-        alert.informativeText = """
-        The folder or disk is read-only, or you don’t have permission to change it.         Your text is still here — save it somewhere writable to keep it.
-        """
+        alert.informativeText = "The folder or disk is read-only, or you don’t have permission to change it. Your text is still here — save it somewhere writable to keep it."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Save As…")
         alert.addButton(withTitle: "Cancel")
