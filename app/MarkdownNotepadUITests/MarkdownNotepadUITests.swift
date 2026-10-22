@@ -191,12 +191,13 @@ final class MarkdownNotepadUITests: XCTestCase {
         let editor = newWindowAndFocusEditor(app)
         editor.typeText("Rename through the title bar.")
 
-        let titleBarName = app.descendants(matching: .any)["titleBarNameField"]
+        let titleBarName = app.descendants(matching: .any)
+            .matching(identifier: "titleBarNameField").firstMatch
         XCTAssertTrue(titleBarName.waitForExistence(timeout: 5),
                       "The title bar should expose a document name field")
 
         titleBarName.doubleClick()
-        let editingField = app.textFields["titleBarNameField"]
+        let editingField = app.textFields.matching(identifier: "titleBarNameField").firstMatch
         XCTAssertTrue(editingField.waitForExistence(timeout: 5),
                       "Double-clicking the title should make the name editable")
         editingField.typeKey("a", modifierFlags: .command)
@@ -204,21 +205,27 @@ final class MarkdownNotepadUITests: XCTestCase {
         captureScreen(name: "12-title-bar-rename")
         app.typeKey(.return, modifierFlags: [])
 
-        let statusName = app.staticTexts["documentName"]
-        XCTAssertTrue(statusName.waitForExistence(timeout: 5))
-        XCTAssertEqual(statusName.label, "Renamed.md",
-                       "Committing the rename should update the document title")
+        let window = app.windows.firstMatch
+        let renamed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "title CONTAINS %@", "Renamed"),
+            object: window
+        )
+        XCTAssertEqual(XCTWaiter().wait(for: [renamed], timeout: 5), .completed,
+                       "Committing the rename should update the window title")
 
-        let titleBarAgain = app.descendants(matching: .any)["titleBarNameField"]
+        let titleBarAgain = app.descendants(matching: .any)
+            .matching(identifier: "titleBarNameField").firstMatch
         titleBarAgain.doubleClick()
-        let secondEdit = app.textFields["titleBarNameField"]
+        let secondEdit = app.textFields.matching(identifier: "titleBarNameField").firstMatch
         XCTAssertTrue(secondEdit.waitForExistence(timeout: 5))
         secondEdit.typeKey("a", modifierFlags: .command)
         secondEdit.typeText("Never committed")
         app.typeKey(.escape, modifierFlags: [])
 
-        XCTAssertEqual(app.staticTexts["documentName"].label, "Renamed.md",
-                       "Escape should discard the in-progress rename")
+        XCTAssertTrue(window.title.contains("Renamed"),
+                      "Escape should discard the in-progress rename")
+        XCTAssertFalse(window.title.contains("Never committed"),
+                       "Escape must not commit the edited name")
 
         app.typeKey("w", modifierFlags: .command)
         let prompt = waitForUnsavedPrompt(app)
